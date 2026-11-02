@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chief — Swipe right to pay a bill</title>
+    <meta
+      name="description"
+      content="Chief — swipe right to pay a bill. Discover verified requests, pledge support and track your giving."
+    />
+
+    <!--
+      Cold-serve brand icons.
+
+      These are registered BEFORE hydration so the mark exists even for the very
+      first paint (and for crawlers / link previews). The same links are also
+      emitted by the route head manager in `src/routes/__root.tsx`; both sets are
+      additive so a host-provided icon is never removed.
+
+      Hrefs MUST be root-absolute (`/favicon.svg`) — a relative `./favicon.svg`
+      resolves against the current route and breaks on nested paths such as
+      `/discover`.
+    -->
+    <link rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+
+    <!-- Matches `theme.logo.themeColor`. -->
+    <meta name="theme-color" content="#ee3a64" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

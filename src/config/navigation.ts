@@ -1,74 +1,67 @@
-/**
- * Canonical header destinations for Chief.
- *
- * The list is declared `as const` (and checked against the public `NavItem`
- * contract with `satisfies`) so TanStack Router still sees each literal `to`
- * and validates it statically — while the exported type stays wide enough for
- * `Header.tsx` to read the optional `shortLabel` without any casting.
- *
- * Footer / dynamic navigation keeps using `siteConfig.navigation` in
- * `src/config/theme.ts`; only the header list carries compact labels.
- */
-
-import type { NavItem } from "@/types/nav";
+import type { NavItem, NavTab, NavTabId } from "@/types/nav";
 
 /**
- * The header rail destinations, in display order.
- *
- * `shortLabel` is the phone-width name: it is rendered below `sm` so three
- * pills fit a 320px-wide rail (44px thumb targets + a 1.5px gap) without any
- * label truncating mid-word. From `sm` up the full `label` is restored.
+ * Header destinations. The `id` is the persisted key stored in
+ * `public.nav_preferences.active_tab`, so ids and labels stay aligned with the
+ * nav-preferences contract.
  */
-export const navigation = [
-  { to: "/discover", label: "Discover", shortLabel: "Discover" },
-  { to: "/dashboard", label: "Dashboard", shortLabel: "Dash" },
-  { to: "/settings", label: "Settings", shortLabel: "Settings" },
-] as const satisfies readonly NavItem[];
+export const NAV_TABS: ReadonlyArray<NavTab> = [
+  {
+    id: "home",
+    item: { to: "/", label: "Home", shortLabel: "Home" },
+  },
+  {
+    id: "discover",
+    item: { to: "/discover", label: "Discover", shortLabel: "Discover" },
+  },
+  {
+    id: "recipients",
+    item: { to: "/recipients", label: "Recipients", shortLabel: "People" },
+  },
+  {
+    id: "dashboard",
+    item: { to: "/dashboard", label: "Dashboard", shortLabel: "Giving" },
+  },
+  {
+    id: "settings",
+    item: { to: "/settings", label: "Settings", shortLabel: "Settings" },
+  },
+];
+
+/** Plain nav items for consumers that only need the link model. */
+export const primaryNavigation: ReadonlyArray<NavItem> = NAV_TABS.map(
+  (tab) => tab.item,
+);
+
+export const navigation = primaryNavigation;
 
 /**
- * The same destinations widened to the public contract.
- *
- * `Header.tsx` maps over this so the rendered `<Link>`s are typed as
- * `readonly NavItem[]` (i.e. `shortLabel` is optional) rather than as the
- * narrow tuple of literals above.
+ * Resolve the nav tab that owns a pathname. Longest matching prefix wins so a
+ * recipient detail route still highlights `recipients`.
  */
-export const headerNavItems: readonly NavItem[] = navigation;
+export function navTabIdForPath(pathname: string): NavTabId | undefined {
+  if (!pathname) return undefined;
 
-/** A concrete destination from the literal list (handy for helper props). */
-export type HeaderDestination = (typeof navigation)[number];
+  let best: { id: NavTabId; length: number } | undefined;
 
-/**
- * Accessible names and helper copy used by the header chrome. Every string the
- * rail announces lives here so the component itself stays purely structural.
- */
-export const headerNavCopy = {
-  /** `aria-label` on the wrapping `<nav>`. */
-  navLabel: "Primary",
-  /** `aria-label` on the scrollable tab strip (`role="group"`). */
-  tabListLabel: "Primary destinations",
-  /**
-   * Accessible name for the brand / home lockup.
-   *
-   * The lockup renders the cap mark *decoratively* next to the wordmark, so
-   * this single label is what assistive tech announces for the whole entity:
-   * "Chief — home", never "chief cap Chief".
-   */
-  homeLabel: "Chief — home",
-  /**
-   * Description of the chief-cap brand mark.
-   *
-   * The header keeps the mark decorative (the link's `aria-label` names the
-   * lockup, so the logo must not be announced twice), but this string is the
-   * ready-made accessible name for any non-decorative reuse — e.g.
-   * `<ChiefCapLogo decorative={false} title={headerNavCopy.brandMarkLabel} />`
-   * in a footer, an empty state or an about page.
-   */
-  brandMarkLabel: "Igbo traditional chief's cap",
-  /**
-   * Optional short title for the mark (tooltip / standalone brand block).
-   * Unused by the header today; kept here so copy edits never touch JSX.
-   */
-  logoTitle: "Chief",
-  /** Visually hidden hint announced alongside the scrollable strip. */
-  scrollHint: "Scroll horizontally to see more destinations.",
-} as const;
+  for (const tab of NAV_TABS) {
+    const to = tab.item.to;
+    const matches =
+      to === "/"
+        ? pathname === "/"
+        : pathname === to || pathname.startsWith(`${to}/`);
+
+    if (!matches) continue;
+
+    const length = to.length;
+    if (!best || length > best.length) {
+      best = { id: tab.id, length };
+    }
+  }
+
+  return best?.id;
+}
+
+export function navItemForTab(id: NavTabId): NavItem | undefined {
+  return NAV_TABS.find((tab) => tab.id === id)?.item;
+}

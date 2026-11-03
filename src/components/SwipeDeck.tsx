@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { RecipientCard } from "@/components/RecipientCard";
+import { loadDeckSessionFromCloud, saveDeckSessionToCloud } from "@/services/chiefDatabase";
 import { containment, cx } from "@/config/containment";
 import { buttons, gradients, typography } from "@/config/theme";
 import { formatNaira, recipients } from "@/lib/recipients";
@@ -93,8 +94,30 @@ let currentSession: DeckSession | null = null;
 const listeners = new Set<() => void>();
 
 function getSnapshot(): DeckSession {
-  if (currentSession === null) currentSession = readSession();
+  if (currentSession === null) {
+    currentSession = readSession();
+    hydrateFromCloud();
+  }
   return currentSession;
+}
+
+/** Signed-in donors: bring back swipe progress saved from another visit/device. */
+function hydrateFromCloud(): void {
+  if (typeof window === "undefined") return;
+  void loadDeckSessionFromCloud().then((remote) => {
+    const local = getSnapshot();
+    if (remote && remote.decisions.length > local.decisions.length) {
+      currentSession = remote;
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(remote));
+      } catch {
+        /* memory only */
+      }
+      emit();
+    } else if (local.decisions.length > 0) {
+      void saveDeckSessionToCloud(local);
+    }
+  });
 }
 
 /** Stable reference for SSR / hydration — never a fresh object per call. */
@@ -139,6 +162,7 @@ function updateSession(
     } catch {
       // Private mode / quota exceeded: keep the in-memory session only.
     }
+    void saveDeckSessionToCloud(currentSession);
   }
 
   emit();

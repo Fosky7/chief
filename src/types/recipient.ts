@@ -25,6 +25,8 @@ export type BillLineItem = {
   description: string;
   /** Amount in Naira (NGN). */
   amount: number;
+  /** Optional extra line shown under the label. */
+  detail?: string;
 };
 
 /**

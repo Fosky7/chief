@@ -21,6 +21,8 @@
  * in sync.
  */
 
+import { pullContributionsFromCloud, pushContributionsToCloud } from "@/services/cloudSync";
+
 export type Contribution = {
   /** Stable identifier used for React keys and de-duplication. */
   id: string;
@@ -231,6 +233,8 @@ function writeOwn(list: readonly Contribution[]): void {
   } catch {
     // Private mode / quota exceeded — the in-memory snapshot still works.
   }
+  // Mirror to the database for signed-in donors (no-op otherwise).
+  void pushContributionsToCloud(list);
 }
 
 /** Recursively collects contribution-shaped objects from an arbitrary value. */
@@ -361,6 +365,21 @@ function ensureInitialized(): void {
 
   window.addEventListener(PLEDGE_EVENT, handlePledgeEvent);
   window.addEventListener("storage", handleStorageEvent);
+
+  // Bring in pledges saved to the database from other devices.
+  void pullContributionsFromCloud().then((remote) => {
+    if (remote === null) return;
+    // Store pledges made on this device before signing in.
+    const remoteIds = new Set(remote.map((r) => r.id));
+    const unsynced = readOwn().filter((c) => !remoteIds.has(c.id));
+    if (unsynced.length > 0) void pushContributionsToCloud(unsynced);
+    if (remote.length === 0) return;
+    const known = new Set(readOwn().map((c) => c.id));
+    const fresh = remote.map(toContribution).filter((c): c is Contribution => !!c && !known.has(c.id));
+    if (fresh.length === 0) return;
+    try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeList([...readOwn(), ...fresh]))); } catch { /* memory only */ }
+    refresh();
+  });
 }
 
 /* -------------------------------------------------------------------------- */

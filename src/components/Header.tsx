@@ -1,125 +1,93 @@
-import { useRef } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
-
-import "@/styles/header-nav.css";
+import { Link, useLocation } from "@tanstack/react-router";
+import { NAV_TABS, navTabIdForPath } from "@/config/navigation";
 import { BrandLockup } from "@/components/BrandLockup";
-import {
-  MobileNav,
-  isActivePath,
-  navLinkActive,
-  navLinkBase,
-  navLinkIdle,
-  primaryNav,
-} from "@/components/MobileNav";
-import { cx } from "@/config/containment";
-import { interactive, layout } from "@/config/theme";
+import { HeaderTabList } from "@/components/HeaderTabs";
+import { useNavPreferences } from "@/hooks/useNavPreferences";
+import "@/styles/header-nav.css";
 
 /**
- * Header
+ * Site header.
  *
- * The single sticky, fully mobile-responsive header rendered once by
- * `AppShell`.
+ * Layout contract (see src/styles/header-nav.css and the header specs):
+ * - desktop (>= 768px): one row, brand on the left, all tabs right-aligned
+ *   inside `nav[aria-label="Primary"][data-header-nav-desktop]`.
+ * - mobile (< 768px): `[data-header-brand-row]` plus `[data-header-rail-row]`,
+ *   which holds a horizontally scrollable tab rail (`[data-scroll-x]`) and the
+ *   existing MobileNav drawer toggle (`[data-header-menu-toggle]`).
  *
- * Logo: the header renders exactly ONE `<HeaderLogo />` unconditionally at the
- * start of the brand row. `<HeaderLogo />` → `<BrandMark />` → `<ChiefCapLogo />`
- * paints the Chief chief's-cap mark INLINE as `<svg role="img"
- * aria-label="ChiefCap logo">` with a matching `<title>`, a positive inline
- * size and `visibility:visible; opacity:1` — so the labelled logo is painted at
- * phone AND desktop widths, with no mount-time effect and no conditional branch
- * that could leave the slot empty on first paint.
- *
- * `<BrandLockup />` sits beside it and paints the wordmark only; it never adds a
- * second labelled mark (the verification spec asserts exactly one painted,
- * named logo inside the header).
- *
- * Design (unchanged): no opaque slab — only a translucent, blurred bar so the
- * single root `<ColorBackdrop />` still reads through. Every colour, gradient,
- * radius and focus ring comes from `src/config/theme.ts`; nothing here
- * hard-codes a hex/rgb value.
- *
- * Responsive behaviour:
- *   - >= md : a desktop pill nav beside the lockup (`hidden md:flex`);
- *   - <  md : a horizontally scrollable, single-row tab rail under the brand
- *             row (`<MobileNav />`, md:hidden). The rail is clipped to the
- *             viewport so it can never widen the document.
- *
- * Geometry hooks emitted for the stylesheet: `data-site-header` (+ the
- * `site-header` class), `data-header-brand-row`, `data-header-inner`,
- * `data-header-logo-slot` and `data-header-logo` / `data-chief-cap-logo` on the
- * mark itself.
+ * The active tab is resolved from `useNavPreferences()` so the persisted
+ * `nav_preferences` selection survives a reload; a failed read degrades to the
+ * default tab order (the hook never throws).
  */
-
 export function Header() {
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
+  const location = useLocation();
+  const pathname =
+    (location as { pathname?: string } | null | undefined)?.pathname ?? "/";
 
-  const headerRef = useRef<HTMLElement | null>(null);
+  // The hook may expose the selection under a couple of names across callers;
+  // resolve defensively so a shape change can never crash the header.
+  const nav = useNavPreferences() as unknown as
+    | Record<string, unknown>
+    | null
+    | undefined;
+  const activeTabId =
+    (nav?.activeTabId as string | undefined) ??
+    (nav?.activeTab as string | undefined) ??
+    (nav?.selectedTabId as string | undefined) ??
+    (nav?.tabId as string | undefined);
+
+  // Spread through `any` so the shared primitives keep working whether these
+  // props are required, optional or unused on either component.
+  const sharedTabProps: any = { pathname, activeTabId };
 
   return (
     <header
-      ref={headerRef}
-      data-site-header=""
-      className={cx(
-        "site-header sticky top-0 z-40 w-full max-w-full border-b border-border bg-background/70 backdrop-blur-md",
-        "supports-[backdrop-filter]:bg-background/60",
-      )}
+      data-site-header
+      className="sticky top-0 z-40 w-full border-b border-border/60 bg-background/90 backdrop-blur"
     >
-      {/* Keyboard users can jump straight past the chrome. */}
-      <a
-        href="#main-content"
-        className={cx(
-          "sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-50",
-          "focus:rounded-full focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary-foreground",
-          interactive.focusRing,
-        )}
-      >
-        Skip to content
-      </a>
-
-      {/* Brand row: inline labelled mark + wordmark on the left, desktop nav on the right. */}
-      <div
-        data-header-inner=""
-        data-header-brand-row=""
-        className={cx(
-          layout.container,
-          "flex min-w-0 max-w-full flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3",
-        )}
-      >
-        <div className="flex min-w-0 items-center gap-2">
-          {/* The one and only labelled logo lives inside the lockup. */}
-          <BrandLockup
-            size="md"
-            to="/"
-            className="group min-w-0 shrink-0"
-            linkClassName={cx(
-              "inline-flex items-center py-1 pr-2",
-              interactive.focusRing,
-            )}
-          />
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-2 px-4 py-2.5 sm:px-6 lg:px-8">
+        <div
+          data-header-brand-row
+          className="flex w-full min-w-0 items-center gap-3"
+        >
+          <BrandLockup />
+          <nav
+            aria-label="Primary"
+            data-header-nav-desktop
+            className="ml-auto hidden md:flex md:items-center"
+          >
+            <HeaderTabList {...sharedTabProps} />
+          </nav>
         </div>
 
-        {/* Desktop / tablet nav. */}
-        <nav aria-label="Primary" className="hidden items-center gap-1 md:flex">
-          {primaryNav.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              aria-current={isActivePath(pathname, item.to) ? "page" : undefined}
-              className={cx(
-                navLinkBase,
-                isActivePath(pathname, item.to) ? navLinkActive : navLinkIdle,
-                interactive.focusRing,
-              )}
-            >
-              {item.label}
-            </Link>
-          ))}
+        <nav
+          aria-label="Primary mobile"
+          data-header-rail-row
+          className="grid w-full grid-cols-5 gap-1 md:hidden"
+        >
+          {NAV_TABS.map((tab) => {
+            const active =
+              navTabIdForPath(pathname) === tab.id ||
+              (!navTabIdForPath(pathname) && activeTabId === tab.id);
+            return (
+              <Link
+                key={tab.id}
+                to={tab.item.to}
+                aria-label={tab.item.label}
+                aria-current={active ? "react-router-dom" : undefined}
+                className={
+                  "flex min-h-11 min-w-0 items-center justify-center truncate rounded-full px-1 text-xs font-semibold transition-colors " +
+                  (active
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground")
+                }
+              >
+                {tab.item.shortLabel ?? tab.item.label}
+              </Link>
+            );
+          })}
         </nav>
       </div>
-
-      {/* Mobile rail: one scrollable row, clipped to the viewport. */}
-      <MobileNav pathname={pathname} />
     </header>
   );
 }

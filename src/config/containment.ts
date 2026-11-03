@@ -76,6 +76,9 @@ const containmentTokens = {
 
   /** Scroll offset that clears the sticky header at every breakpoint. */
   scrollOffset: "scroll-mt-24 sm:scroll-mt-28 lg:scroll-mt-32",
+  focusRing:
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+  noOverflow: "min-w-0 max-w-full overflow-x-clip",
 } as const;
 
 /**

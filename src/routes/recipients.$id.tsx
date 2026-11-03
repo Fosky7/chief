@@ -10,6 +10,7 @@ import {
   layout,
   typography,
 } from "@/config/theme";
+import { recordContribution } from "@/lib/contributions";
 import { findRecipient, formatNaira, type Recipient } from "@/lib/recipients";
 
 /**
@@ -186,7 +187,18 @@ function RecipientDetail({ recipient }: { recipient: Recipient }) {
 
               <button
                 type="button"
-                onClick={() => setContributed(true)}
+                onClick={() => {
+                  // Save the payment to the giving ledger (browser + database when signed in).
+                  recordContribution({
+                    recipientName: recipient.name,
+                    amount: recipient.stillNeeded,
+                    billerName: recipient.biller,
+                    category: recipient.category,
+                    recipientSlug: recipient.id,
+                    source: "recipient-page",
+                  });
+                  setContributed(true);
+                }}
                 disabled={contributed}
                 className={`${buttons.primary} mt-5 w-full justify-center disabled:cursor-not-allowed disabled:opacity-60`}
               >

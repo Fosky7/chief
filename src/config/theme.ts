@@ -115,6 +115,15 @@ export const gradients = {
    */
   pageMesh:
     'bg-[radial-gradient(circle_at_15%_20%,hsl(var(--brand-rose)/0.35),transparent_45%),radial-gradient(circle_at_85%_10%,hsl(var(--brand-amber)/0.30),transparent_40%),radial-gradient(circle_at_50%_90%,hsl(var(--brand-indigo)/0.30),transparent_45%)]',
+  /** Thin spectrum rule used between filter rows. */
+  spectrumDivider:
+    'bg-[linear-gradient(90deg,hsl(var(--brand-rose)),hsl(var(--brand-amber)),hsl(var(--brand-emerald)),hsl(var(--brand-cyan)),hsl(var(--brand-indigo)),hsl(var(--brand-violet)))]',
+  /** Soft top-light on cards. */
+  cardSheen: 'bg-[linear-gradient(180deg,hsl(var(--background)/0.6),transparent)]',
+  /** Glow behind an active filter chip. */
+  chipGlow: 'shadow-[0_0_0_3px_hsl(var(--primary)/0.15)]',
+  /** Call-to-action fill. */
+  cta: 'bg-primary text-primary-foreground hover:bg-primary/90',
 } as const;
 
 /**
@@ -125,7 +134,7 @@ export const gradients = {
  * source of truth for the mark's name, and it must always contain the word
  * "logo" so assistive tech and verification specs can identify it.
  */
-const LOGO_ACCESSIBLE_NAME = 'ChiefCap logo' as const;
+const LOGO_ACCESSIBLE_NAME = 'Chief logo' as const;
 
 /**
  * Brand mark ('Chief' chief's-cap logo) tokens.
@@ -281,6 +290,8 @@ export const interactive = {
 export const buttons = {
   primary: interactive.primaryButton,
   secondary: interactive.secondaryButton,
+  ghost:
+    'inline-flex min-h-[2.75rem] touch-manipulation items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-50',
 } as const;
 
 export const radii = {
@@ -469,7 +480,7 @@ export type BrandKey = any;
  * Shared, frozen empty list returned for unknown config keys so
  * `siteConfig.*.map(...)` can never be called on `undefined`.
  */
-const EMPTY_CONFIG_LIST: readonly never[] = Object.freeze([]);
+const EMPTY_CONFIG_LIST: readonly never[] = Object.freeze([] as never[]);
 
 const siteConfigBase = {
   name: 'Chief',

@@ -23,6 +23,8 @@
  *    slot, which is what makes the undo stack exactly one deep.
  */
 
+import { loadSwipeSessionFromCloud, saveSwipeSessionToCloud } from "@/services/cloudSync";
+
 const isBrowser = (): boolean => typeof window !== "undefined";
 
 /** Versioned key: bump the suffix whenever the persisted shape changes. */
@@ -222,6 +224,8 @@ function writePersisted(state: SwipeSessionState): void {
   } catch {
     // Quota exceeded or storage blocked — the in-memory session still works.
   }
+  // Mirror to the database for signed-in donors (no-op otherwise).
+  void saveSwipeSessionToCloud(state);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -336,6 +340,19 @@ class SwipeSessionStore {
 
     const stored = readPersisted();
     if (stored) this.state = stored;
+
+    // A session saved from another device wins only for the same deck.
+    void loadSwipeSessionFromCloud().then((raw) => {
+      const remote = parseSwipeSession(raw);
+      if (!remote || remote.deckKey !== this.state.deckKey || remote.history.length < this.state.history.length) {
+        // This device is further along (or nothing saved yet): store it.
+        if (this.state.history.length > 0) void saveSwipeSessionToCloud(this.state);
+        return;
+      }
+      if (remote.history.length === this.state.history.length) return;
+      this.state = remote;
+      this.emit();
+    });
   }
 
   private pushRecord(action: SwipeAction): SwipeRecord | null {

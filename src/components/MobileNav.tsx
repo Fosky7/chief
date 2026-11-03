@@ -1,7 +1,5 @@
-import { Link } from "@tanstack/react-router";
-
+import { HeaderTabList } from "@/components/HeaderTabs";
 import { cx } from "@/config/containment";
-import { interactive } from "@/config/theme";
 
 /**
  * MobileNav
@@ -10,67 +8,59 @@ import { interactive } from "@/config/theme";
  * rendered under the header brand row. It deliberately renders NO brand mark —
  * the single labelled logo lives in `Header.tsx` and stays visible at every
  * width, so nothing here may hide or duplicate it.
+ *
+ * Structure (the hooks the Playwright specs assert):
+ *
+ *   <nav aria-label="Primary" data-mobile-nav data-header-rail-row>
+ *     <div data-mobile-nav-rail data-header-nav-rail data-scroll-x>…tabs…</div>
+ *   </nav>
+ *
+ * The rail itself never widens the document: `min-w-0` + `max-w-full` on both
+ * the nav and the rail, plus `overflow-x: auto` from
+ * `src/styles/header-nav.css`, means the row scrolls internally. Snapping is
+ * avoided for reduced-motion users by the stylesheet.
+ *
+ * The destination list, the `isActivePath` helper and the pill class tokens
+ * now live in `HeaderTabs.tsx`; they are re-exported below for backward
+ * compatibility with existing consumers.
  */
 
-/** Primary navigation model — re-exported by `Header.tsx`. */
-export interface NavItem {
-  to: string;
-  label: string;
-}
+export {
+  HeaderTabLink,
+  HeaderTabList,
+  isActivePath,
+  navLinkActive,
+  navLinkBase,
+  navLinkIdle,
+  primaryNav,
+} from "@/components/HeaderTabs";
 
-export const primaryNav: ReadonlyArray<NavItem> = [
-  { to: "/discover", label: "Discover" },
-  { to: "/dashboard", label: "Dashboard" },
-];
-
-export const navLinkBase =
-  "inline-flex items-center whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition-colors";
-
-export const navLinkActive = "bg-primary text-primary-foreground shadow-sm";
-
-export const navLinkIdle = "text-muted-foreground hover:text-foreground";
-
-/** True when `pathname` is `to` or a nested route beneath it. */
-export function isActivePath(pathname: string, to: string): boolean {
-  if (!pathname) return false;
-  if (pathname === to) return true;
-  return pathname.startsWith(`${to}/`);
-}
+export type { HeaderTabLinkProps, HeaderTabListProps } from "@/components/HeaderTabs";
+export type { NavItem, NavTo } from "@/types/nav";
 
 export interface MobileNavProps {
+  /** Current router pathname; forwarded to the shared tab list. */
   pathname: string;
   className?: string | undefined;
 }
 
 export function MobileNav({ pathname, className }: MobileNavProps) {
   return (
-    <div
+    <nav
+      aria-label="Primary"
       data-mobile-nav=""
-      className={cx("md:hidden", className)}
+      data-header-rail-row=""
+      className={cx("w-full min-w-0 max-w-full md:hidden", className)}
     >
       <div
         data-mobile-nav-rail=""
-        className="flex flex-nowrap items-center gap-1 overflow-x-auto px-4 pb-2"
+        data-header-nav-rail=""
+        data-scroll-x=""
+        className="flex min-w-0 max-w-full flex-nowrap items-center gap-1.5 overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-px-3 snap-x snap-proximity px-3 pb-2 pt-1"
       >
-        {primaryNav.map((item) => {
-          const active = isActivePath(pathname, item.to);
-          return (
-            <Link
-              key={item.to}
-              to={item.to}
-              aria-current={active ? "page" : undefined}
-              className={cx(
-                navLinkBase,
-                active ? navLinkActive : navLinkIdle,
-                interactive.focusRing,
-              )}
-            >
-              {item.label}
-            </Link>
-          );
-        })}
+        <HeaderTabList pathname={pathname} />
       </div>
-    </div>
+    </nav>
   );
 }
 

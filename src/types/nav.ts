@@ -25,13 +25,28 @@ export type NavTo = NonNullable<LinkProps["to"]>;
  * A single header destination.
  *
  * - `to`         — router-validated path.
- * - `label`      — the full, human-readable name (shown from `sm` up).
- * - `shortLabel` — optional compact name shown on phones so three pills fit a
- *                  320px rail without truncating mid-word. When omitted, the
- *                  header falls back to `label` at every breakpoint.
+ * - `label`      — the full, human-readable name. Always wins as the
+ *                  accessible name of the link and is shown from `sm` up.
+ * - `shortLabel` — optional compact name painted below the `sm` breakpoint so
+ *                  three-plus pills fit a 320px rail without truncating
+ *                  mid-word. This is paint-only: `label` still supplies the
+ *                  accessible name, and `shortLabel` should therefore be a
+ *                  substring of `label` (e.g. "Board" for "Dashboard"). When
+ *                  omitted, the header falls back to `label` at every
+ *                  breakpoint.
+ * - `ariaLabel`  — optional override for the accessible name. Defaults to
+ *                  `label`, so most entries never need it.
  */
 export interface NavItem {
   readonly to: NavTo;
   readonly label: string;
   readonly shortLabel?: string;
+  /**
+   * Accessible name override for the rendered link.
+   *
+   * Defaults to `label` — set it only when the visible wordmark differs from
+   * the name screen-reader users should hear. Keep it in sync with the visible
+   * text so WCAG 2.5.3 (label in name) continues to pass.
+   */
+  readonly ariaLabel?: string;
 }

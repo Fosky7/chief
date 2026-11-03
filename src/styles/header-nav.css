@@ -8,10 +8,16 @@
  * guaranteed to be paintable at EVERY breakpoint. No media query, `[hidden]`
  * or `display:none` rule may collapse them — the verification spec asserts a
  * visible, labelled logo at 375/390 and 1280 px.
+ *
+ * Rail rules: below `md` the tab list becomes a horizontally scrollable,
+ * snap-friendly row that scrolls *itself* instead of widening the document.
+ * From `md` up the rail is hidden and the inline desktop nav takes over, so
+ * assistive tech never sees two `Primary` landmarks at once.
  */
 
 .site-header {
   --header-brand-row: 3.25rem;
+  --header-rail-row: 2.75rem;
   --logo-size: 1.75rem;
   --logo-gap: 0.5rem;
 }
@@ -71,6 +77,18 @@
   row-gap: 0.5rem;
 }
 
+/*
+ * The rail row is itself a flex container that may never grow past the
+ * viewport. `min-width: 0` is what allows the inner scroller to actually
+ * scroll rather than stretch its parent.
+ */
+[data-site-header] [data-header-rail-row] {
+  display: flex;
+  flex-wrap: nowrap;
+  min-width: 0;
+  max-width: 100%;
+}
+
 /* Desktop nav pill links. */
 [data-site-header] nav[aria-label="Primary"] a {
   border-radius: 9999px;
@@ -79,8 +97,10 @@
   line-height: 1.25rem;
 }
 
-/* Mobile rail — a single horizontally scrollable row, clipped to viewport. */
+/* Phone rail: a single horizontally scrollable row, clipped to viewport. */
 @media (max-width: 767px) {
+  [data-site-header] [data-header-rail-row],
+  [data-site-header] [data-header-nav-rail],
   [data-site-header] [data-mobile-nav],
   [data-site-header] [data-mobile-nav-rail] {
     display: flex;
@@ -88,13 +108,25 @@
     overflow-x: auto;
     overflow-y: hidden;
     max-width: 100%;
+    min-width: 0;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
   }
 
+  [data-site-header] [data-header-rail-row]::-webkit-scrollbar,
+  [data-site-header] [data-header-nav-rail]::-webkit-scrollbar,
   [data-site-header] [data-mobile-nav]::-webkit-scrollbar,
   [data-site-header] [data-mobile-nav-rail]::-webkit-scrollbar {
     display: none;
+  }
+
+  /* Pills never shrink, never wrap, and snap to the rail's start edge. */
+  [data-site-header] [data-header-rail-row] a {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    scroll-snap-align: start;
   }
 
   /* Explicitly assert the logo stays painted on phones too. */
@@ -103,5 +135,21 @@
     display: inline-flex !important;
     visibility: visible !important;
     opacity: 1 !important;
+  }
+}
+
+/* From md up the desktop inline nav is the only visible tab list. */
+@media (min-width: 768px) {
+  [data-site-header] [data-header-rail-row] {
+    display: none;
+  }
+}
+
+/* Honour reduced-motion: no snapping, no smooth scrolling in the rail. */
+@media (prefers-reduced-motion: reduce) {
+  [data-site-header] [data-header-nav-rail],
+  [data-site-header] [data-mobile-nav-rail] {
+    scroll-behavior: auto;
+    scroll-snap-type: none;
   }
 }

@@ -1,16 +1,10 @@
 import { useRef } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { useRouterState } from "@tanstack/react-router";
 
 import "@/styles/header-nav.css";
 import { BrandLockup } from "@/components/BrandLockup";
-import {
-  MobileNav,
-  isActivePath,
-  navLinkActive,
-  navLinkBase,
-  navLinkIdle,
-  primaryNav,
-} from "@/components/MobileNav";
+import { HeaderTabList } from "@/components/HeaderTabs";
+import { MobileNav } from "@/components/MobileNav";
 import { cx } from "@/config/containment";
 import { interactive, layout } from "@/config/theme";
 
@@ -32,21 +26,21 @@ import { interactive, layout } from "@/config/theme";
  * second labelled mark (the verification spec asserts exactly one painted,
  * named logo inside the header).
  *
+ * Destinations come from ONE place: `HeaderTabs.tsx`. The desktop nav renders
+ * `<HeaderTabList />` inline from `md` up; `<MobileNav />` renders the exact
+ * same list inside a horizontally scrollable rail below `md`. Because both read
+ * `primaryNav`, the tab set can never diverge between breakpoints.
+ *
  * Design (unchanged): no opaque slab — only a translucent, blurred bar so the
  * single root `<ColorBackdrop />` still reads through. Every colour, gradient,
  * radius and focus ring comes from `src/config/theme.ts`; nothing here
  * hard-codes a hex/rgb value.
  *
- * Responsive behaviour:
- *   - >= md : a desktop pill nav beside the lockup (`hidden md:flex`);
- *   - <  md : a horizontally scrollable, single-row tab rail under the brand
- *             row (`<MobileNav />`, md:hidden). The rail is clipped to the
- *             viewport so it can never widen the document.
- *
- * Geometry hooks emitted for the stylesheet: `data-site-header` (+ the
- * `site-header` class), `data-header-brand-row`, `data-header-inner`,
- * `data-header-logo-slot` and `data-header-logo` / `data-chief-cap-logo` on the
- * mark itself.
+ * Geometry hooks emitted for the stylesheet and the browser specs:
+ * `data-site-header` (+ the `site-header` class), `data-header-brand-row`,
+ * `data-header-inner`, `data-header-nav-desktop`, `data-header-rail-row`,
+ * `data-scroll-x` and `data-header-logo-slot` / `data-header-logo` /
+ * `data-chief-cap-logo` on the mark itself.
  */
 
 export function Header() {
@@ -99,22 +93,13 @@ export function Header() {
           />
         </div>
 
-        {/* Desktop / tablet nav. */}
-        <nav aria-label="Primary" className="hidden items-center gap-1 md:flex">
-          {primaryNav.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              aria-current={isActivePath(pathname, item.to) ? "page" : undefined}
-              className={cx(
-                navLinkBase,
-                isActivePath(pathname, item.to) ? navLinkActive : navLinkIdle,
-                interactive.focusRing,
-              )}
-            >
-              {item.label}
-            </Link>
-          ))}
+        {/* Desktop / tablet nav — the shared tab list, inline. */}
+        <nav
+          aria-label="Primary"
+          data-header-nav-desktop=""
+          className="hidden items-center gap-1 md:flex"
+        >
+          <HeaderTabList pathname={pathname} />
         </nav>
       </div>
 

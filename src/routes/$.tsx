@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { NotFoundPage } from "@/routes/not-found";
+import NotFoundPage from "@/routes/not-found";
 
 /**
  * Catch-all route ("/$").

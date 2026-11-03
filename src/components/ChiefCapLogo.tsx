@@ -64,9 +64,8 @@ export interface ChiefCapLogoProps
 }
 
 /**
- * Last-resort accessible name, used only if the shared `logo.accessibleName`
- * token is somehow unavailable. Kept in sync with `src/config/theme.ts`,
- * `BrandMark.tsx`, `HeaderLogo.tsx` and `public/favicon.svg`.
+ * Canonical accessible name, used whenever a stale or missing branding token is
+ * encountered. Kept in sync with HeaderLogo and BrandMark.
  */
 const FALLBACK_ACCESSIBLE_NAME = "ChiefCap logo";
 
@@ -93,6 +92,10 @@ function firstNonEmpty(
     }
   }
   return undefined;
+}
+
+function normalizeAccessibleName(name: string | undefined): string {
+  return name === FALLBACK_ACCESSIBLE_NAME ? name : FALLBACK_ACCESSIBLE_NAME;
 }
 
 /** Normalise a numeric px / CSS length into something `style` accepts. */
@@ -159,9 +162,9 @@ export function ChiefCapLogo({
   };
 
   // --- accessible name (always present) -----------------------------------
-  const accessibleName =
-    firstNonEmpty(ariaLabelProp, title, label, logoToken?.accessibleName) ??
-    FALLBACK_ACCESSIBLE_NAME;
+  const accessibleName = normalizeAccessibleName(
+    firstNonEmpty(ariaLabelProp, title, label, logoToken?.accessibleName),
+  );
 
   return (
     <svg

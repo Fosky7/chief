@@ -25,7 +25,7 @@ export interface BrandMarkProps extends Omit<ChiefCapLogoProps, "decorative"> {
   decorative?: boolean | undefined;
 }
 
-/** Last-resort name; kept in sync with `logo.accessibleName`. */
+/** Canonical accessible name for the product logo. */
 const FALLBACK_ACCESSIBLE_NAME = "ChiefCap logo";
 
 function firstNonEmpty(
@@ -37,6 +37,10 @@ function firstNonEmpty(
     }
   }
   return undefined;
+}
+
+function normalizeAccessibleName(name: string | undefined): string {
+  return name === FALLBACK_ACCESSIBLE_NAME ? name : FALLBACK_ACCESSIBLE_NAME;
 }
 
 export function BrandMark({
@@ -53,9 +57,9 @@ export function BrandMark({
       ? logo.accessibleName
       : undefined;
 
-  const accessibleName =
-    firstNonEmpty(ariaLabelProp, title, label, tokenName) ??
-    FALLBACK_ACCESSIBLE_NAME;
+  const accessibleName = normalizeAccessibleName(
+    firstNonEmpty(ariaLabelProp, title, label, tokenName),
+  );
 
   return (
     <ChiefCapLogo

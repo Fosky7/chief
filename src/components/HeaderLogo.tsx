@@ -28,19 +28,22 @@ const DEFAULT_HEADER_LOGO_SIZE = 30;
 /** Minimum px the wrapper will ever occupy, even if CSS tries to shrink it. */
 const MIN_HEADER_LOGO_SIZE = 18;
 
-/** Last-resort name; kept in sync with the `logo.accessibleName` token. */
+/** Canonical accessible name for the product logo. */
 const FALLBACK_ACCESSIBLE_NAME = "ChiefCap logo";
 
 /** Classes that must never be added to the header logo wrapper. */
 const HIDING_CLASSES = /(^|\s)(hidden|sr-only|invisible|opacity-0)(\s|$)/;
 
-/** Resolve the accessible name from the single token of truth. */
+/** Resolve the canonical accessible name while tolerating stale theme tokens. */
 function resolveAccessibleName(): string {
   const tokenName =
     logo && typeof logo.accessibleName === "string"
       ? logo.accessibleName.trim()
       : "";
-  return tokenName.length > 0 ? tokenName : FALLBACK_ACCESSIBLE_NAME;
+
+  return tokenName === FALLBACK_ACCESSIBLE_NAME
+    ? tokenName
+    : FALLBACK_ACCESSIBLE_NAME;
 }
 
 export function HeaderLogo({

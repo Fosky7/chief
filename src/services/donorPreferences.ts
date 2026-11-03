@@ -1,378 +1,218 @@
-/**
- * Donor preferences store (Module 10 — Settings).
- *
- * Module-scope store persisted to `localStorage` under
- * `chief:preferences:v1`, following the exact shape of the existing session
- * store: a stable snapshot plus `subscribe`/`getSnapshot` so consumers can use
- * `useSyncExternalStore` without tearing.
- *
- * Guarantees:
- * - Lazy hydration: nothing is read until the first `getSnapshot()` /
- *   `subscribe()` call, so importing this module during SSR is safe.
- * - Defensive I/O: every read/write is wrapped in try/catch and guards
- *   `typeof window`, so private mode (or a disabled store) degrades to an
- *   in-memory store instead of throwing.
- * - Cross-tab consistency: a `storage` event from another tab replaces the
- *   snapshot and notifies listeners.
- * - `clearSwipeSession()` removes only swipe-session keys — the giving ledger
- *   is never touched.
- */
-
+import { supabase } from "@/integrations/supabase/client";
 import {
-  DEFAULT_PREFERENCES,
-  PREFERENCES_STORAGE_KEY,
-  SWIPE_SESSION_KEY_PREFIX,
-  SWIPE_SESSION_STORAGE_KEY,
-  clampDisplayName,
-  isPreferredAmount,
-  normaliseDisplayName,
+  DONOR_PREFERENCES_COLUMNS,
+  DONOR_PREFERENCES_RPC,
+  DONOR_PREFERENCES_STORAGE_KEY,
+  DONOR_PREFERENCES_TABLE,
+} from "@/integrations/supabase/contracts";
+import {
+  DEFAULT_DONOR_PREFERENCES,
+  coerceNavTab,
   type DonorPreferences,
-  type NotificationKey,
-  type PreferredAmount,
+  type NavTabId,
+  type PreferenceSource,
 } from "@/types/preferences";
 
-type Listener = () => void;
-
-/** Active listeners (one per subscribed component / hook instance). */
-const listeners = new Set<Listener>();
-
 /**
- * The current snapshot. `null` means "not hydrated yet" — the first read
- * hydrates from storage. Once hydrated, the reference only changes on a real
- * mutation, which is exactly what `useSyncExternalStore` requires.
+ * Donor preference persistence.
+ *
+ * Read path: signed-in session → `public.donor_preferences` row (declared in
+ * `@/integrations/supabase/contracts`), else → the localStorage mirror, else →
+ * `DEFAULT_DONOR_PREFERENCES`.
+ *
+ * Write path: always mirror to localStorage first (so the choice survives even
+ * when the network is down), then upsert the row through the declared RPC and
+ * fall back to a direct table upsert.
+ *
+ * Nothing in this module ever throws: every failure resolves to a value.
  */
-let snapshot: DonorPreferences | null = null;
 
-/** The window `storage` listener is attached at most once per document. */
-let storageListenerAttached = false;
+export interface LoadDonorPreferencesResult {
+  preferences: DonorPreferences;
+  source: PreferenceSource;
+}
 
-/* -------------------------------------------------------------------------- */
-/* Storage access                                                             */
-/* -------------------------------------------------------------------------- */
+export interface SaveDonorPreferencesResult {
+  ok: boolean;
+  preferences: DonorPreferences;
+  source: PreferenceSource;
+  error?: string;
+}
 
-/**
- * Resolve `localStorage`, returning `null` on the server or when the browser
- * blocks storage access (Safari private mode, hardened cookie settings, …).
- */
-function getStorage(): Storage | null {
-  if (typeof window === "undefined") return null;
+function hasWindow(): boolean {
+  return typeof window !== "undefined" && !!window.localStorage;
+}
+
+function readLocal(): DonorPreferences | null {
+  if (!hasWindow()) return null;
   try {
-    return window.localStorage ?? null;
+    const raw = window.localStorage.getItem(DONOR_PREFERENCES_STORAGE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as Record<string, unknown> | null;
+    if (!parsed || typeof parsed !== "object") return null;
+
+    return {
+      navTab: coerceNavTab(parsed.navTab),
+      updatedAt:
+        typeof parsed.updatedAt === "string"
+          ? parsed.updatedAt
+          : new Date().toISOString(),
+      donorId: typeof parsed.donorId === "string" ? parsed.donorId : null,
+    };
   } catch {
     return null;
   }
 }
 
-/** Coerce an untrusted value into a boolean, falling back to `fallback`. */
-function readBoolean(value: unknown, fallback: boolean): boolean {
-  return typeof value === "boolean" ? value : fallback;
-}
-
-/**
- * Merge an arbitrary parsed value over the defaults, validating field by
- * field. A corrupted — or partially written — record therefore still yields a
- * usable `DonorPreferences` instead of throwing.
- */
-function sanitisePreferences(raw: unknown): DonorPreferences {
-  if (typeof raw !== "object" || raw === null) {
-    return { ...DEFAULT_PREFERENCES };
-  }
-
-  const source = raw as Partial<Record<keyof DonorPreferences, unknown>>;
-
-  const displayName =
-    typeof source.displayName === "string"
-      ? normaliseDisplayName(source.displayName)
-      : DEFAULT_PREFERENCES.displayName;
-
-  const preferredAmount: PreferredAmount = isPreferredAmount(source.preferredAmount)
-    ? source.preferredAmount
-    : DEFAULT_PREFERENCES.preferredAmount;
-
-  return {
-    displayName,
-    preferredAmount,
-    notifyOnVerifiedRequest: readBoolean(
-      source.notifyOnVerifiedRequest,
-      DEFAULT_PREFERENCES.notifyOnVerifiedRequest,
-    ),
-    notifyOnPayment: readBoolean(
-      source.notifyOnPayment,
-      DEFAULT_PREFERENCES.notifyOnPayment,
-    ),
-    reduceMotion: readBoolean(source.reduceMotion, DEFAULT_PREFERENCES.reduceMotion),
-    anonymousGiving: readBoolean(
-      source.anonymousGiving,
-      DEFAULT_PREFERENCES.anonymousGiving,
-    ),
-  };
-}
-
-/** Read (and validate) the persisted preferences, or return the defaults. */
-function readStoredPreferences(): DonorPreferences {
-  const storage = getStorage();
-  if (!storage) return { ...DEFAULT_PREFERENCES };
-
+function writeLocal(preferences: DonorPreferences): boolean {
+  if (!hasWindow()) return false;
   try {
-    const raw = storage.getItem(PREFERENCES_STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_PREFERENCES };
-    return sanitisePreferences(JSON.parse(raw) as unknown);
-  } catch {
-    // Corrupt JSON, blocked storage, quota errors — fall back to defaults.
-    return { ...DEFAULT_PREFERENCES };
-  }
-}
-
-/** Persist the snapshot, silently falling back to in-memory on failure. */
-function persistPreferences(next: DonorPreferences): void {
-  const storage = getStorage();
-  if (!storage) return;
-
-  try {
-    storage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(next));
-  } catch {
-    // Private mode / quota exceeded: the in-memory snapshot stays authoritative
-    // for this tab, which is the best available fallback.
-  }
-}
-
-/* -------------------------------------------------------------------------- */
-/* Change notification                                                        */
-/* -------------------------------------------------------------------------- */
-
-/** Fan out a change to every subscriber, isolating listener failures. */
-function notifyListeners(): void {
-  // Copy first so a listener that unsubscribes mid-flush is safe.
-  for (const listener of Array.from(listeners)) {
-    try {
-      listener();
-    } catch (error) {
-      // A broken consumer must never take the store down with it.
-      console.error("[donorPreferences] listener failed", error);
-    }
-  }
-}
-
-/** Shallow equality across every preference field. */
-function arePreferencesEqual(a: DonorPreferences, b: DonorPreferences): boolean {
-  return (
-    a.displayName === b.displayName &&
-    a.preferredAmount === b.preferredAmount &&
-    a.notifyOnVerifiedRequest === b.notifyOnVerifiedRequest &&
-    a.notifyOnPayment === b.notifyOnPayment &&
-    a.reduceMotion === b.reduceMotion &&
-    a.anonymousGiving === b.anonymousGiving
-  );
-}
-
-/**
- * Re-read preferences written by another tab. Uses the event's key filter so
- * unrelated writes (including the giving ledger) never re-render the page.
- */
-function handleStorageEvent(event: StorageEvent): void {
-  // `key === null` means the whole store was cleared — always re-sync.
-  if (event.key !== null && event.key !== PREFERENCES_STORAGE_KEY) return;
-
-  const current = ensureSnapshot();
-  const next = readStoredPreferences();
-  if (arePreferencesEqual(current, next)) return;
-
-  snapshot = next;
-  notifyListeners();
-}
-
-/** Attach the cross-tab listener once, in the browser only. */
-function attachStorageListener(): void {
-  if (storageListenerAttached) return;
-  if (typeof window === "undefined" || typeof window.addEventListener !== "function") {
-    return;
-  }
-
-  window.addEventListener("storage", handleStorageEvent);
-  storageListenerAttached = true;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Snapshot management                                                        */
-/* -------------------------------------------------------------------------- */
-
-/** Hydrate on first use and return the stable snapshot reference. */
-function ensureSnapshot(): DonorPreferences {
-  if (snapshot === null) {
-    snapshot = readStoredPreferences();
-  }
-  return snapshot;
-}
-
-/** Write the next snapshot, persist it and notify every subscriber. */
-function commit(next: DonorPreferences): void {
-  snapshot = next;
-  persistPreferences(next);
-  notifyListeners();
-}
-
-/* -------------------------------------------------------------------------- */
-/* Public store API                                                           */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Current preferences. Returns the same object reference until something
- * actually changes, so it is safe to pass straight to `useSyncExternalStore`.
- */
-export function getSnapshot(): DonorPreferences {
-  return ensureSnapshot();
-}
-
-/**
- * Server/SSR snapshot. Also used as the first paint on the client before
- * hydration, so it must be a stable reference (it is — a frozen constant).
- */
-export function getServerSnapshot(): DonorPreferences {
-  return DEFAULT_PREFERENCES;
-}
-
-/** Subscribe to preference changes. Returns the unsubscribe function. */
-export function subscribe(listener: Listener): () => void {
-  listeners.add(listener);
-  attachStorageListener();
-  // Hydrate now so the very first render already sees persisted values.
-  ensureSnapshot();
-
-  return () => {
-    listeners.delete(listener);
-  };
-}
-
-/** Set (or clear, with an empty string) the donor's greeting name. */
-export function setDisplayName(name: string): void {
-  const current = ensureSnapshot();
-  const displayName = clampDisplayName(typeof name === "string" ? name : "");
-  if (displayName === current.displayName) return;
-
-  commit({ ...current, displayName });
-}
-
-/**
- * Choose the default pledge amount. Values outside the preset list are
- * ignored-safe: they fall back to the shipped default rather than corrupting
- * the store.
- */
-export function setPreferredAmount(amount: number): void {
-  const current = ensureSnapshot();
-  const preferredAmount: PreferredAmount = isPreferredAmount(amount)
-    ? amount
-    : DEFAULT_PREFERENCES.preferredAmount;
-  if (preferredAmount === current.preferredAmount) return;
-
-  commit({ ...current, preferredAmount });
-}
-
-/**
- * Flip a notification toggle. Pass `value` to set it explicitly (idempotent —
- * useful for switches), or omit it to invert the current state.
- */
-export function toggleNotification(key: NotificationKey, value?: boolean): void {
-  const current = ensureSnapshot();
-  const next = typeof value === "boolean" ? value : !current[key];
-  if (next === current[key]) return;
-
-  commit({ ...current, [key]: next });
-}
-
-/** Honour the donor's reduced-motion preference. */
-export function setReduceMotion(value: boolean): void {
-  const current = ensureSnapshot();
-  if (current.reduceMotion === Boolean(value)) return;
-
-  commit({ ...current, reduceMotion: Boolean(value) });
-}
-
-/** Hide (or show) the donor's name on the bills they pay. */
-export function setAnonymousGiving(value: boolean): void {
-  const current = ensureSnapshot();
-  if (current.anonymousGiving === Boolean(value)) return;
-
-  commit({ ...current, anonymousGiving: Boolean(value) });
-}
-
-/** Restore every preference to `DEFAULT_PREFERENCES` and drop the stored key. */
-export function resetPreferences(): void {
-  snapshot = { ...DEFAULT_PREFERENCES };
-
-  const storage = getStorage();
-  if (storage) {
-    try {
-      storage.removeItem(PREFERENCES_STORAGE_KEY);
-    } catch {
-      // Nothing to do — the in-memory snapshot is already reset.
-    }
-  }
-
-  notifyListeners();
-}
-
-/* -------------------------------------------------------------------------- */
-/* Swipe session (deck) housekeeping                                          */
-/* -------------------------------------------------------------------------- */
-
-/** True when `key` belongs to the swipe deck session, and nothing else. */
-function isSwipeSessionKey(key: string): boolean {
-  if (key === SWIPE_SESSION_STORAGE_KEY) return true;
-  return key.toLowerCase().startsWith(SWIPE_SESSION_KEY_PREFIX);
-}
-
-/**
- * Whether a swipe session is currently stored. Imperative helper used to
- * enable/disable the "Clear swipe session" action — it deliberately does not
- * subscribe (session changes are already observed by `useSwipeSession`).
- */
-export function hasSwipeSession(): boolean {
-  const storage = getStorage();
-  if (!storage) return false;
-
-  try {
-    if (storage.getItem(SWIPE_SESSION_STORAGE_KEY) !== null) return true;
-
-    for (let index = 0; index < storage.length; index += 1) {
-      const key = storage.key(index);
-      if (key && isSwipeSessionKey(key)) return true;
-    }
+    window.localStorage.setItem(
+      DONOR_PREFERENCES_STORAGE_KEY,
+      JSON.stringify(preferences),
+    );
+    return true;
   } catch {
     return false;
   }
-
-  return false;
 }
 
-/**
- * Forget the local swipe session so the deck restarts at card 1.
- *
- * Only swipe-session keys are removed: the giving ledger, preferences and
- * anything else in storage are left exactly as they were. Returns `true` when
- * at least one key was removed, so the caller can pick the right message.
- */
-export function clearSwipeSession(): boolean {
-  const storage = getStorage();
-  if (!storage) return false;
-
-  let cleared = false;
-
+async function currentUserId(): Promise<string | null> {
   try {
-    // Collect keys first: mutating a Storage while iterating it is unsafe.
-    const keys: string[] = [];
-    for (let index = 0; index < storage.length; index += 1) {
-      const key = storage.key(index);
-      if (key && isSwipeSessionKey(key)) keys.push(key);
-    }
-
-    for (const key of keys) {
-      storage.removeItem(key);
-      cleared = true;
-    }
+    const { data, error } = await supabase.auth.getSession();
+    if (error) return null;
+    return data?.session?.user?.id ?? null;
   } catch {
-    // Blocked storage: report whatever we managed to remove.
-    return cleared;
+    return null;
+  }
+}
+
+/** Load the persisted preference (never rejects). */
+export async function loadDonorPreferences(): Promise<LoadDonorPreferencesResult> {
+  const local = readLocal();
+  const userId = await currentUserId();
+
+  if (userId) {
+    try {
+      const { data, error } = await supabase
+        .from(DONOR_PREFERENCES_TABLE)
+        .select(
+          `${DONOR_PREFERENCES_COLUMNS.navTab}, ${DONOR_PREFERENCES_COLUMNS.updatedAt}`,
+        )
+        .eq(DONOR_PREFERENCES_COLUMNS.userId, userId)
+        .maybeSingle();
+
+      const row = (data ?? null) as Record<string, unknown> | null;
+
+      if (!error && row) {
+        const preferences: DonorPreferences = {
+          navTab: coerceNavTab(row[DONOR_PREFERENCES_COLUMNS.navTab]),
+          updatedAt:
+            typeof row[DONOR_PREFERENCES_COLUMNS.updatedAt] === "string"
+              ? (row[DONOR_PREFERENCES_COLUMNS.updatedAt] as string)
+              : new Date().toISOString(),
+          donorId: userId,
+        };
+        writeLocal(preferences);
+        return { preferences, source: "supabase" };
+      }
+    } catch {
+      // fall through to the local mirror / defaults
+    }
   }
 
-  return cleared;
+  if (local) return { preferences: local, source: "local" };
+  return { preferences: { ...DEFAULT_DONOR_PREFERENCES }, source: "default" };
 }
+
+/** Persist the preference (never rejects). */
+export async function saveDonorPreferences(
+  input: DonorPreferences | NavTabId,
+): Promise<SaveDonorPreferencesResult> {
+  const requested: DonorPreferences =
+    typeof input === "string"
+      ? {
+          navTab: coerceNavTab(input),
+          updatedAt: new Date().toISOString(),
+          donorId: null,
+        }
+      : {
+          navTab: coerceNavTab(input.navTab),
+          updatedAt: new Date().toISOString(),
+          donorId: input.donorId ?? null,
+        };
+
+  // Mirror locally first so the choice survives a reload even if the write to
+  // the database fails or the visitor is anonymous.
+  const localOk = writeLocal(requested);
+
+  const userId = await currentUserId();
+  if (!userId) {
+    return {
+      ok: localOk,
+      preferences: requested,
+      source: "local",
+      ...(localOk
+        ? {}
+        : { error: "Your browser blocked local storage for this site." }),
+    };
+  }
+
+  try {
+    // Preferred path: the declared security-invoker RPC.
+    const rpc = await supabase.rpc(DONOR_PREFERENCES_RPC, {
+      p_nav_tab: requested.navTab,
+    });
+
+    if (!rpc.error) {
+      return {
+        ok: true,
+        preferences: { ...requested, donorId: userId },
+        source: "supabase",
+      };
+    }
+
+    // Fallback: direct table upsert against the declared table/columns.
+    const direct = await supabase.from(DONOR_PREFERENCES_TABLE).upsert(
+      {
+        [DONOR_PREFERENCES_COLUMNS.userId]: userId,
+        [DONOR_PREFERENCES_COLUMNS.navTab]: requested.navTab,
+        [DONOR_PREFERENCES_COLUMNS.updatedAt]: requested.updatedAt,
+      },
+      { onConflict: DONOR_PREFERENCES_COLUMNS.userId },
+    );
+
+    if (!direct.error) {
+      return {
+        ok: true,
+        preferences: { ...requested, donorId: userId },
+        source: "supabase",
+      };
+    }
+
+    return {
+      ok: false,
+      preferences: { ...requested, donorId: userId },
+      source: "local",
+      error: direct.error.message || rpc.error.message || "Preference not saved",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      preferences: { ...requested, donorId: userId },
+      source: "local",
+      error:
+        error instanceof Error ? error.message : "Preference not saved",
+    };
+  }
+}
+
+/** Convenience wrapper for the tab-only call sites. */
+export function persistNavTab(
+  tab: NavTabId,
+): Promise<SaveDonorPreferencesResult> {
+  return saveDonorPreferences(tab);
+}
+
+export { DONOR_PREFERENCES_STORAGE_KEY, DONOR_PREFERENCES_TABLE };

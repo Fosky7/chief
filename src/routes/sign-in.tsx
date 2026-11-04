@@ -1,11 +1,21 @@
 import { useState, type FormEvent } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
+import { GradientButton } from "@/components/ui/brand";
 
 // Canonical sign-in page (/sign-in), registered in src/routeTree.gen.ts.
 export const Route = createFileRoute("/sign-in")({
   component: SignInPage,
 });
+
+const trustPoints = [
+  "Every bill is reviewed before it goes live",
+  "Payments go straight to the hospital, school or landlord",
+  "Amounts shown in Naira, always",
+];
+
+const inputClass =
+  "mt-1.5 w-full rounded-xl border border-input bg-background/70 px-4 py-2.5 text-foreground outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/20";
 
 function SignInPage() {
   const navigate = useNavigate();
@@ -30,39 +40,83 @@ function SignInPage() {
   }
 
   return (
-    <div className="mx-auto max-w-sm px-4 py-16">
-      <h1 className="text-3xl font-bold">Sign in</h1>
-      <p className="mt-2 text-sm text-muted-foreground">Sign in to post a bill or track your donations.</p>
-      <form onSubmit={onSubmit} className="mt-8 space-y-4">
-        <label className="block text-sm font-medium">
-          Email
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
-          />
-        </label>
-        <label className="block text-sm font-medium">
-          Password
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
-          />
-        </label>
-        {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-md bg-primary py-2 font-semibold text-primary-foreground disabled:opacity-60"
-        >
-          {loading ? "Signing in…" : "Continue"}
-        </button>
-      </form>
+    <div className="mx-auto max-w-5xl px-4 py-12 sm:py-20">
+      <div className="grid overflow-hidden rounded-3xl md:grid-cols-2 md:shadow-elegant">
+        {/* Brand panel (desktop only) */}
+        <aside className="bg-brand-gradient relative hidden flex-col justify-between overflow-hidden p-10 text-primary-foreground md:flex">
+          <div aria-hidden="true" className="absolute inset-0 bg-foreground/25" />
+          <div aria-hidden="true" className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary-foreground/15 blur-3xl" />
+          <div className="relative">
+            <span
+              aria-hidden="true"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-primary-foreground/20 font-display text-xl font-bold ring-1 ring-primary-foreground/40"
+            >
+              C
+            </span>
+          </div>
+          <figure className="relative mt-12">
+            <blockquote className="font-display text-2xl font-medium leading-snug">
+              “Someone paid my son's hospital bill on a Tuesday afternoon. I never met them, but I'll never forget them.”
+            </blockquote>
+            <figcaption className="mt-4 text-sm font-medium opacity-90">— Mama Chidi, Enugu</figcaption>
+          </figure>
+          <ul className="relative mt-10 space-y-3 text-sm">
+            {trustPoints.map((t) => (
+              <li key={t} className="flex items-start gap-3">
+                <span
+                  aria-hidden="true"
+                  className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary-foreground/25 text-xs font-bold"
+                >
+                  ✓
+                </span>
+                <span>{t}</span>
+              </li>
+            ))}
+          </ul>
+        </aside>
+
+        {/* Form card */}
+        <section className="glass shadow-elegant rounded-3xl p-8 sm:p-10 md:rounded-none md:shadow-none">
+          <p className="text-brand-gradient text-xs font-bold uppercase tracking-[0.18em]">Welcome back</p>
+          <h1 className="mt-2 font-display text-4xl font-semibold tracking-tight">Sign in</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Sign in to post a bill or track your donations.</p>
+          <form onSubmit={onSubmit} className="mt-8 space-y-5">
+            <label className="block text-sm font-semibold">
+              Email
+              <input
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={inputClass}
+              />
+            </label>
+            <label className="block text-sm font-semibold">
+              Password
+              <input
+                type="password"
+                required
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={inputClass}
+              />
+            </label>
+            {error && (
+              <p
+                role="alert"
+                className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+              >
+                {error}
+              </p>
+            )}
+            <GradientButton type="submit" disabled={loading} size="lg" className="w-full">
+              {loading ? "Signing in…" : "Continue"}
+            </GradientButton>
+          </form>
+        </section>
+      </div>
     </div>
   );
 }

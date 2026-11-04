@@ -1,5 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 import { formatNaira, fundedPercent } from "@/lib/currency";
+import {
+  CategoryBadge,
+  GlowBackdrop,
+  GradientButton,
+  ProgressBar,
+  SectionHeading,
+  StatCard,
+} from "@/components/ui/brand";
 
 export const Route = createFileRoute("/")({
   component: HomePage,
@@ -44,95 +53,291 @@ const featured = [
   },
 ];
 
+type Bill = (typeof featured)[number];
+
+/** Per-step visual tint, mapped to brand tokens. */
+const stepTints = [
+  "bg-brand-violet/12 text-brand-violet ring-brand-violet/25",
+  "bg-brand-coral/12 text-brand-coral ring-brand-coral/25",
+  "bg-brand-saffron/15 text-brand-saffron ring-brand-saffron/30",
+];
+
+const donorInitials = [
+  { initials: "AO", tone: "bg-brand-violet" },
+  { initials: "TB", tone: "bg-brand-magenta" },
+  { initials: "CN", tone: "bg-brand-coral" },
+  { initials: "FK", tone: "bg-cat-health" },
+];
+
+function StepIcon({ index }: { index: number }) {
+  const common = {
+    width: 22,
+    height: 22,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+  if (index === 0) {
+    // Swipe: hand / arrows
+    return (
+      <svg {...common}>
+        <path d="M4 12h16" />
+        <path d="m15 7 5 5-5 5" />
+        <path d="m9 7-5 5 5 5" />
+      </svg>
+    );
+  }
+  if (index === 1) {
+    // Give: heart
+    return (
+      <svg {...common}>
+        <path d="M19 14c1.5-1.5 3-3.3 3-5.5A5.5 5.5 0 0 0 12 5.5 5.5 5.5 0 0 0 2 8.5c0 2.2 1.5 4 3 5.5l7 7Z" />
+      </svg>
+    );
+  }
+  // See it paid: check circle
+  return (
+    <svg {...common}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8.5 12 2.5 2.5 4.5-5" />
+    </svg>
+  );
+}
+
+/** Image wrapper with a fixed aspect ratio and gradient fallback so failed loads never shift layout. */
+function BillImage({ bill, className, eager }: { bill: Bill; className?: string; eager?: boolean }) {
+  return (
+    <div className={`relative overflow-hidden bg-brand-gradient ${className ?? ""}`}>
+      <img
+        src={bill.image}
+        alt={bill.title}
+        loading={eager ? "eager" : "lazy"}
+        decoding="async"
+        className="absolute inset-0 h-full w-full object-cover"
+      />
+      <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent" />
+    </div>
+  );
+}
+
+function HeroCardStack() {
+  const [top, second, third] = featured;
+  const topPct = fundedPercent(top.raised, top.goal);
+
+  return (
+    <div className="relative mx-auto h-[440px] w-full max-w-sm sm:h-[480px]" aria-label="Example bill cards" role="group">
+      {/* Back cards */}
+      <div
+        aria-hidden="true"
+        className="glass shadow-elegant absolute inset-x-6 top-6 overflow-hidden rounded-3xl"
+        style={{ transform: "rotate(6deg)" }}
+      >
+        <BillImage bill={third} className="aspect-[4/3]" />
+        <div className="h-28" />
+      </div>
+      <div
+        aria-hidden="true"
+        className="glass shadow-elegant absolute inset-x-4 top-3 overflow-hidden rounded-3xl"
+        style={{ transform: "rotate(-6deg)" }}
+      >
+        <BillImage bill={second} className="aspect-[4/3]" />
+        <div className="h-28" />
+      </div>
+
+      {/* Top card (floating) */}
+      <div className="animate-float absolute inset-x-0 top-0">
+        <article className="ring-gradient shadow-elegant overflow-hidden rounded-3xl bg-card">
+          <BillImage bill={top} className="aspect-[4/3]" eager />
+          <div className="space-y-3 p-5">
+            <div className="flex items-center justify-between gap-2">
+              <CategoryBadge category={top.category} />
+              <span className="text-xs font-medium text-muted-foreground">{top.city}</span>
+            </div>
+            <h3 className="text-lg font-semibold leading-snug text-foreground">{top.title}</h3>
+            <ProgressBar value={top.raised} goal={top.goal} label={`${top.title} funding progress`} />
+            <div className="flex flex-wrap items-baseline justify-between gap-x-2 text-sm">
+              <span className="font-semibold text-foreground">{formatNaira(top.raised)}</span>
+              <span className="text-muted-foreground">
+                {topPct}% of {formatNaira(top.goal)}
+              </span>
+            </div>
+          </div>
+        </article>
+
+        {/* Swipe hint chips */}
+        <span
+          aria-hidden="true"
+          className="glass shadow-elegant absolute -left-4 top-1/3 inline-flex -rotate-6 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-destructive sm:-left-8"
+        >
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-destructive/15">✕</span>
+          Skip
+        </span>
+        <span
+          aria-hidden="true"
+          className="glass shadow-elegant absolute -right-4 top-[22%] inline-flex rotate-6 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-success sm:-right-8"
+        >
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-success/15">✓</span>
+          Help
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function Section({ children, className, label }: { children: ReactNode; className?: string; label?: string }) {
+  return (
+    <section aria-label={label} className={`mx-auto max-w-6xl px-4 ${className ?? ""}`}>
+      {children}
+    </section>
+  );
+}
+
 function HomePage() {
   return (
-    <div>
-      <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-16 md:grid-cols-2 md:py-24">
-        <div>
-          <span className="inline-block rounded-full bg-muted px-3 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Verified bills · Real people
-          </span>
-          <h1 className="mt-4 text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl">
-            Pay a bill with a swipe
-          </h1>
-          <p className="mt-4 max-w-lg text-lg text-muted-foreground">
-            Chief connects people with urgent rent, school and hospital bills to donors who want
-            to help. Every bill is checked by our team before it goes live, so your money goes
-            exactly where it should.
-          </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              to="/discover"
-              className="rounded-lg bg-primary px-5 py-3 font-semibold text-primary-foreground shadow-sm transition-opacity hover:opacity-90"
-            >
-              Start swiping
-            </Link>
-            <Link
-              to="/signin"
-              className="rounded-lg border border-border bg-background px-5 py-3 font-semibold text-foreground transition-colors hover:bg-muted"
-            >
-              Post a bill
-            </Link>
+    <div className="overflow-x-clip">
+      {/* Hero */}
+      <section className="relative isolate">
+        <GlowBackdrop />
+        <div className="mx-auto grid max-w-6xl items-center gap-14 px-4 pb-16 pt-12 md:grid-cols-2 md:pb-24 md:pt-20">
+          <div className="animate-fade-up">
+            <span className="glass inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              <span className="relative flex h-2 w-2" aria-hidden="true">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cat-health opacity-70 motion-reduce:hidden" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-cat-health" />
+              </span>
+              Verified bills · Real people
+            </span>
+
+            <h1 className="mt-6 text-5xl font-semibold leading-[1.02] tracking-tight text-foreground sm:text-6xl lg:text-7xl">
+              Pay a bill with a <span className="text-brand-gradient italic">swipe</span>
+            </h1>
+
+            <p className="mt-6 max-w-lg text-lg leading-relaxed text-muted-foreground">
+              Chief connects people with urgent rent, school and hospital bills to donors who want
+              to help. Every bill is checked by our team before it goes live, so your money goes
+              exactly where it should.
+            </p>
+
+            <div className="mt-9 flex flex-wrap gap-3">
+              <GradientButton to="/discover" size="lg">
+                Start swiping
+              </GradientButton>
+              <GradientButton to="/signin" variant="ghost" size="lg">
+                Post a bill
+              </GradientButton>
+            </div>
+
+            <div className="mt-10 flex items-center gap-4">
+              <div className="flex -space-x-3" aria-hidden="true">
+                {donorInitials.map((d) => (
+                  <span
+                    key={d.initials}
+                    className={`flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold text-primary-foreground ring-2 ring-background ${d.tone}`}
+                  >
+                    {d.initials}
+                  </span>
+                ))}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                <span className="font-semibold text-foreground">3,870 kind donors</span> already giving
+              </p>
+            </div>
+          </div>
+
+          <div className="animate-fade-up" style={{ animationDelay: "150ms" }}>
+            <HeroCardStack />
           </div>
         </div>
-        <div className="relative">
-          <img
-            src="https://images.unsplash.com/photo-1607863680198-23d4b2565df0?auto=format&fit=crop&w=900&q=70"
-            alt="A smiling person holding a phone"
-            className="aspect-[4/3] w-full rounded-2xl object-cover shadow-lg"
+      </section>
+
+      {/* Stats band */}
+      <Section label="Sample stats" className="py-6">
+        <div className="bg-brand-gradient shadow-elegant relative isolate overflow-hidden rounded-[2rem] px-6 py-10 sm:px-10">
+          {/* Dark overlay keeps white text above WCAG AA contrast on the bright end of the gradient */}
+          <div aria-hidden="true" className="absolute inset-0 -z-10 bg-black/25" />
+          <div className="grid gap-5 sm:grid-cols-3">
+            {stats.map((s) => (
+              <StatCard
+                key={s.label}
+                value={s.value}
+                label={s.label}
+                className="border-white/20 bg-white/10 shadow-none [&>div:first-child]:bg-none [&>div:first-child]:text-white [&>div:last-child]:text-white/90"
+              />
+            ))}
+          </div>
+        </div>
+      </Section>
+
+      {/* How it works */}
+      <Section className="py-20">
+        <SectionHeading eyebrow="Simple by design" title="How it works" />
+        <div className="relative mt-10 grid gap-6 md:grid-cols-3">
+          <div
+            aria-hidden="true"
+            className="absolute left-[16%] right-[16%] top-12 hidden border-t-2 border-dotted border-primary/30 md:block"
           />
-        </div>
-      </section>
-
-      <section aria-label="Sample stats" className="border-y border-border bg-muted/50">
-        <div className="mx-auto grid max-w-6xl gap-6 px-4 py-10 sm:grid-cols-3">
-          {stats.map((s) => (
-            <div key={s.label} className="text-center">
-              <div className="text-3xl font-extrabold">{s.value}</div>
-              <div className="mt-1 text-sm text-muted-foreground">{s.label}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-6xl px-4 py-16">
-        <h2 className="text-2xl font-bold">How it works</h2>
-        <div className="mt-6 grid gap-6 sm:grid-cols-3">
           {steps.map((s, i) => (
-            <div key={s.title} className="rounded-xl border border-border bg-card p-6">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary font-bold text-primary-foreground">
-                {i + 1}
+            <div
+              key={s.title}
+              className="glass shadow-elegant animate-fade-up relative rounded-3xl p-7"
+              style={{ animationDelay: `${i * 120}ms` }}
+            >
+              <div className="flex items-center justify-between">
+                <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ring-1 ring-inset ${stepTints[i]}`}>
+                  <StepIcon index={i} />
+                </div>
+                <span className="bg-brand-gradient flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-primary-foreground shadow-elegant">
+                  {i + 1}
+                </span>
               </div>
-              <h3 className="mt-4 text-lg font-semibold">{s.title}</h3>
-              <p className="mt-2 text-sm text-muted-foreground">{s.body}</p>
+              <h3 className="mt-6 text-xl font-semibold text-foreground">{s.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
             </div>
           ))}
         </div>
-      </section>
+      </Section>
 
-      <section className="mx-auto max-w-6xl px-4 pb-20">
-        <div className="flex items-end justify-between">
-          <h2 className="text-2xl font-bold">Bills people are paying today</h2>
-          <Link to="/discover" className="text-sm font-semibold text-primary hover:underline">
-            See all
-          </Link>
-        </div>
-        <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Featured bills */}
+      <Section className="pb-20">
+        <SectionHeading
+          eyebrow="Live now"
+          title="Bills people are paying today"
+          action={
+            <Link
+              to="/discover"
+              className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10"
+            >
+              See all <span aria-hidden="true">→</span>
+            </Link>
+          }
+        />
+        <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {featured.map((b) => {
             const pct = fundedPercent(b.raised, b.goal);
             return (
-              <article key={b.title} className="overflow-hidden rounded-xl border border-border bg-card">
-                <img src={b.image} alt={b.title} className="aspect-video w-full object-cover" loading="lazy" />
-                <div className="p-5">
-                  <div className="text-xs font-semibold uppercase text-muted-foreground">
-                    {b.category} · {b.city}
+              <article
+                key={b.title}
+                className="group glass shadow-elegant overflow-hidden rounded-3xl transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl"
+              >
+                <div className="relative">
+                  <BillImage bill={b} className="aspect-video" />
+                  <div className="absolute left-4 top-4">
+                    <CategoryBadge category={b.category} className="bg-card/90 backdrop-blur" />
                   </div>
-                  <h3 className="mt-1 font-semibold">{b.title}</h3>
-                  <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-muted">
-                    <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
-                  </div>
-                  <div className="mt-2 flex justify-between text-sm">
-                    <span className="font-semibold">{formatNaira(b.raised)}</span>
+                  <span className="bg-brand-gradient absolute right-4 top-4 rounded-full px-2.5 py-1 text-xs font-bold text-primary-foreground shadow-elegant">
+                    {pct}% funded
+                  </span>
+                </div>
+                <div className="p-6">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{b.city}</div>
+                  <h3 className="mt-1.5 text-lg font-semibold leading-snug text-foreground">{b.title}</h3>
+                  <ProgressBar value={b.raised} goal={b.goal} className="mt-5" label={`${b.title} funding progress`} />
+                  <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-2 text-sm">
+                    <span className="font-semibold text-foreground">{formatNaira(b.raised)}</span>
                     <span className="text-muted-foreground">of {formatNaira(b.goal)}</span>
                   </div>
                 </div>
@@ -140,7 +345,26 @@ function HomePage() {
             );
           })}
         </div>
-      </section>
+      </Section>
+
+      {/* Final CTA */}
+      <Section className="pb-24">
+        <div className="glass ring-gradient shadow-elegant relative isolate overflow-hidden rounded-[2rem] px-6 py-14 text-center sm:px-12">
+          <GlowBackdrop className="opacity-70" />
+          <p className="text-brand-gradient text-xs font-bold uppercase tracking-[0.18em]">Make it count</p>
+          <h2 className="mx-auto mt-3 max-w-2xl text-3xl font-semibold leading-tight text-foreground sm:text-5xl">
+            Someone&apos;s bill could be paid today
+          </h2>
+          <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
+            Every naira goes straight to a verified bill. Give a little, change a lot.
+          </p>
+          <div className="mt-8 flex justify-center">
+            <GradientButton to="/discover" size="lg">
+              Start helping now <span aria-hidden="true">→</span>
+            </GradientButton>
+          </div>
+        </div>
+      </Section>
     </div>
   );
 }

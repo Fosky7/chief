@@ -1,7 +1,8 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ChiefLogo } from "@/components/ChiefLogo";
 import { GradientButton } from "@/components/ui/brand";
+import { useAuth } from "@/hooks/useAuth";
 
 const links = [
   { to: "/discover", label: "Discover" },
@@ -14,6 +15,8 @@ const pillBase =
 // Floating frosted-glass navigation bar.
 export function NavBar() {
   const [open, setOpen] = useState(false);
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
 
   // Close the mobile sheet on Escape.
   useEffect(() => {
@@ -24,6 +27,12 @@ export function NavBar() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
+
+  async function handleSignOut() {
+    setOpen(false);
+    await signOut();
+    navigate({ to: "/" });
+  }
 
   return (
     <header className="sticky top-0 z-40 px-3 pt-3">
@@ -56,9 +65,15 @@ export function NavBar() {
                 {l.label}
               </Link>
             ))}
-            <GradientButton to="/sign-in" size="sm" className="ml-2">
-              Sign in
-            </GradientButton>
+            {user ? (
+              <GradientButton type="button" size="sm" variant="ghost" className="ml-2" onClick={() => void handleSignOut()}>
+                Sign out
+              </GradientButton>
+            ) : (
+              <GradientButton to="/auth" size="sm" className="ml-2">
+                Sign in
+              </GradientButton>
+            )}
           </div>
 
           <button
@@ -93,9 +108,15 @@ export function NavBar() {
                   {l.label}
                 </Link>
               ))}
-              <GradientButton to="/sign-in" size="md" className="mt-1 w-full" onClick={() => setOpen(false)}>
-                Sign in
-              </GradientButton>
+              {user ? (
+                <GradientButton type="button" size="md" variant="ghost" className="mt-1 w-full" onClick={() => void handleSignOut()}>
+                  Sign out
+                </GradientButton>
+              ) : (
+                <GradientButton to="/auth" size="md" className="mt-1 w-full" onClick={() => setOpen(false)}>
+                  Sign in
+                </GradientButton>
+              )}
             </div>
           </div>
         )}

@@ -3,6 +3,7 @@ import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/r
 import { Layout } from "@/components/Layout";
 import appCss from "../styles.css?url";
 
+// Root route: child routes are registered in src/routeTree.gen.ts.
 export const Route = createRootRoute({
   head: () => ({
     meta: [
@@ -13,8 +14,12 @@ export const Route = createRootRoute({
         name: "description",
         content: "Swipe through verified bills and help real people pay rent, school fees and hospital bills.",
       },
+      { property: "og:title", content: "Chief" },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,

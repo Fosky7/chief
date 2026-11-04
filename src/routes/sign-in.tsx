@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 
+// Canonical sign-in page — path matches filename (/sign-in).
 export const Route = createFileRoute("/sign-in")({
   component: SignInPage,
 });

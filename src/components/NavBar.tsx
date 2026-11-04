@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
+import { ChiefLogo } from "@/components/ChiefLogo";
 
 const links = [
   { to: "/discover", label: "Discover" },
@@ -12,9 +13,14 @@ export function NavBar() {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur">
       <nav aria-label="Main" className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-        <Link to="/" className="flex items-center gap-2 font-bold text-foreground">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-foreground">₦</span>
-          <span className="text-lg tracking-tight">SwipePay</span>
+        <Link
+          to="/"
+          aria-label="Chief home"
+          data-testid="brand-link"
+          className="flex items-center gap-2 font-bold text-foreground"
+        >
+          <ChiefLogo className="h-8 w-8" decorative />
+          <span className="text-lg tracking-tight">Chief</span>
         </Link>
 
         <div className="hidden items-center gap-1 md:flex">
@@ -29,7 +35,7 @@ export function NavBar() {
             </Link>
           ))}
           <Link
-            to="/signin"
+            to="/sign-in"
             className="ml-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
           >
             Sign in
@@ -57,7 +63,7 @@ export function NavBar() {
                 {l.label}
               </Link>
             ))}
-            <Link to="/signin" onClick={() => setOpen(false)} className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">
+            <Link to="/sign-in" onClick={() => setOpen(false)} className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">
               Sign in
             </Link>
           </div>

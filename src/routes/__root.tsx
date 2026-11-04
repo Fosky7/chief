@@ -1,9 +1,8 @@
-import type { ReactNode } from "react";
-import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import { Outlet, Link, createRootRoute } from "@tanstack/react-router";
 import { Layout } from "@/components/Layout";
-import appCss from "../styles.css?url";
 
 // Root route: child routes are registered in src/routeTree.gen.ts.
+// Styles are loaded by src/main.tsx (client SPA mounted into #root).
 export const Route = createRootRoute({
   head: () => ({
     meta: [
@@ -16,29 +15,11 @@ export const Route = createRootRoute({
       },
       { property: "og:title", content: "Chief" },
     ],
-    links: [
-      { rel: "stylesheet", href: appCss },
-      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
-    ],
+    links: [{ rel: "icon", type: "image/svg+xml", href: "/favicon.svg" }],
   }),
-  shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFound,
 });
-
-function RootShell({ children }: { children: ReactNode }) {
-  return (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  );
-}
 
 function RootComponent() {
   return (

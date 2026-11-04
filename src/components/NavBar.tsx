@@ -1,0 +1,80 @@
+import { Link } from "@tanstack/react-router";
+import { useState } from "react";
+import { ChiefWordmark } from "@/components/ChiefLogo";
+
+const links = [
+  { to: "/discover", label: "Discover" },
+  { to: "/dashboard", label: "Dashboard" },
+] as const;
+
+export function NavBar() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur">
+      <nav aria-label="Main" className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
+        <Link
+          to="/"
+          aria-label="Chief home"
+          data-testid="brand-link"
+          className="flex items-center font-bold text-foreground"
+        >
+          <ChiefWordmark logoClassName="h-8 w-8" />
+        </Link>
+
+        <div className="hidden items-center gap-1 md:flex">
+          {links.map((l) => (
+            <Link
+              key={l.to}
+              to={l.to}
+              className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              activeProps={{ className: "rounded-md px-3 py-2 text-sm font-medium bg-muted text-foreground" }}
+            >
+              {l.label}
+            </Link>
+          ))}
+          <Link
+            to="/sign-in"
+            className="ml-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+          >
+            Sign in
+          </Link>
+        </div>
+
+        <button
+          type="button"
+          className="rounded-md p-2 text-foreground md:hidden"
+          aria-label="Toggle menu"
+          aria-expanded={open}
+          aria-controls="mobile-menu"
+          onClick={() => setOpen((o) => !o)}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            {open ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
+          </svg>
+        </button>
+      </nav>
+
+      {open && (
+        <div id="mobile-menu" className="border-t border-border bg-background px-4 py-3 md:hidden">
+          {/* Small brand mark at the top of the mobile menu (not a link, to keep a single "Chief home" link). */}
+          <div className="mb-2 px-3 py-1" data-testid="mobile-menu-brand">
+            <ChiefWordmark size="sm" gap="gap-1.5" />
+          </div>
+          <div className="flex flex-col gap-1">
+            {links.map((l) => (
+              <Link key={l.to} to={l.to} onClick={() => setOpen(false)} className="rounded-md px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">
+                {l.label}
+              </Link>
+            ))}
+            <Link to="/sign-in" onClick={() => setOpen(false)} className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">
+              Sign in
+            </Link>
+          </div>
+        </div>
+      )}
+    </header>
+  );
+}
+
+export default NavBar;

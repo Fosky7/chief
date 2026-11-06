@@ -20,7 +20,7 @@ test.describe("Home page redesign @affected", () => {
   test("Post a bill navigates to Sign in @affected", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("link", { name: "Post a bill", exact: true }).click();
-    await expect(page).toHaveURL(/sign-?in/);
-    await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+    await expect(page).toHaveURL(/\/auth/);
+    await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
   });
 });

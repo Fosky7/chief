@@ -9,7 +9,7 @@ import { GlowBackdrop } from "@/components/ui/brand";
 const footerLinks = [
   { to: "/discover", label: "Explore bills" },
   { to: "/dashboard", label: "Your account" },
-  { to: "/sign-in", label: "Log in" },
+  { to: "/auth", label: "Log in" },
 ] as const;
 
 // App shell: ambient glow, floating nav, page content and branded footer.

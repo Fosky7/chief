@@ -16,7 +16,7 @@ test.describe("Module 1 — welcome page & navigation", () => {
   test("Post a bill opens Sign in @affected", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("link", { name: "Post a bill" }).click();
-    await expect(page).toHaveURL(/\/sign-?in/);
+    await expect(page).toHaveURL(/\/auth/);
     await expect(page.locator("main").getByText(/sign in/i).first()).toBeVisible();
   });
 

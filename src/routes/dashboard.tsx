@@ -5,6 +5,9 @@ import { formatNaira } from "@/lib/currency";
 import { GradientButton, StatCard } from "@/components/ui/brand";
 
 export const Route = createFileRoute("/dashboard")({
+  head: () => ({
+    meta: [{ title: "Dashboard — Chief" }],
+  }),
   component: DashboardPage,
 });
 
@@ -78,7 +81,7 @@ function DashboardPage() {
           <p className="mt-1 text-sm text-muted-foreground">
             Sign in to see the bills you've supported and the ones you've posted.
           </p>
-          <GradientButton to="/sign-in" size="lg" className="mt-6">
+          <GradientButton to="/auth" size="lg" className="mt-6">
             Sign in to continue
           </GradientButton>
         </div>

@@ -1,155 +1,203 @@
-import { useSyncExternalStore } from "react";
-import type { ReactNode } from "react";
-import type { Session, SupabaseClient, User } from "@supabase/supabase-js";
+import {
+  useEffect,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
+import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import type { Profile, SignupRole, UserRole } from "@/types";
 
-/**
- * App-wide auth state backed by a tiny external store, so any component can
- * call useAuth() without a provider. Subscribes to Supabase once, lazily.
- */
+export type AuthMode = "signIn" | "signUp";
+export type SignUpRole = "donor" | "bill_requester";
+export type UserRole = SignUpRole | "admin";
 
-interface AuthState {
+export interface AuthProfile {
+  id: string;
+  role: UserRole | null;
+  email?: string | null;
+  full_name?: string | null;
+  [key: string]: unknown;
+}
+
+interface AuthSnapshot {
   session: Session | null;
   user: User | null;
-  profile: Profile | null;
-  role: UserRole | null;
+  profile: AuthProfile | null;
   loading: boolean;
 }
 
-// Untyped view of the client: the generated Database type may not yet list
-// the tables created by this module's migration.
-const db = supabase as unknown as SupabaseClient;
+export interface Credentials {
+  email: string;
+  password: string;
+}
 
-let state: AuthState = { session: null, user: null, profile: null, role: null, loading: true };
+export interface SignUpInput extends Credentials {
+  role: SignUpRole;
+}
+
+/* ------------------------------------------------------------------ */
+/* Module-level store: one source of truth shared by every component.  */
+/* Works with or without <AuthProvider> so existing layouts keep        */
+/* working regardless of how they were wired in earlier modules.        */
+/* ------------------------------------------------------------------ */
+
+let state: AuthSnapshot = {
+  session: null,
+  user: null,
+  profile: null,
+  loading: true,
+};
 const listeners = new Set<() => void>();
 let initialized = false;
 
-function setState(patch: Partial<AuthState>) {
+function setState(patch: Partial<AuthSnapshot>) {
   state = { ...state, ...patch };
-  listeners.forEach((l) => l());
-}
-
-/** Metadata is user-editable, so never trust it for admin. */
-function roleFromMetadata(user: User | null): UserRole | null {
-  const r = user?.user_metadata?.role;
-  return r === "donor" || r === "requester" ? r : user ? "donor" : null;
-}
-
-async function loadProfile(user: User) {
-  const { data, error } = await db
-    .from("profiles")
-    .select("id, full_name, role, created_at")
-    .eq("id", user.id)
-    .maybeSingle();
-  // Ignore stale responses if the user changed meanwhile.
-  if (state.user?.id !== user.id) return;
-  if (!error && data) {
-    const profile = data as Profile;
-    setState({ profile, role: profile.role });
-  }
-}
-
-function applySession(session: Session | null) {
-  const user = session?.user ?? null;
-  const sameUser = (state.user?.id ?? null) === (user?.id ?? null);
-  setState({
-    session,
-    user,
-    profile: sameUser ? state.profile : null,
-    role: sameUser && state.profile ? state.role : roleFromMetadata(user),
-    loading: false,
-  });
-  // Defer DB calls out of the auth callback to avoid Supabase client deadlocks.
-  if (user && !sameUser) setTimeout(() => void loadProfile(user), 0);
-}
-
-function init() {
-  if (initialized || typeof window === "undefined") return;
-  initialized = true;
-  supabase.auth
-    .getSession()
-    .then(({ data }) => applySession(data.session))
-    .catch(() => setState({ loading: false }));
-  supabase.auth.onAuthStateChange((_event, session) => applySession(session));
+  listeners.forEach((listener) => listener());
 }
 
 function subscribe(listener: () => void) {
-  init();
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
   };
 }
 
-const getSnapshot = () => state;
+const serverSnapshot: AuthSnapshot = {
+  session: null,
+  user: null,
+  profile: null,
+  loading: true,
+};
 
-function messageOf(err: unknown, fallback: string) {
-  return err instanceof Error && err.message ? err.message : fallback;
+function metadataRole(user: User | null): UserRole | null {
+  const raw = user?.user_metadata?.role;
+  return raw === "donor" || raw === "bill_requester" || raw === "admin"
+    ? raw
+    : null;
 }
 
-export interface SignUpInput {
-  email: string;
-  password: string;
-  role: SignupRole;
-  fullName?: string;
-}
-
-export interface SignUpResult {
-  error: string | null;
-  /** True when Supabase requires email confirmation before the first sign in. */
-  needsConfirmation: boolean;
-}
-
-async function signIn(email: string, password: string): Promise<{ error: string | null }> {
+async function loadProfile(user: User | null): Promise<AuthProfile | null> {
+  if (!user) return null;
   try {
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    if (error) return { error: error.message };
-    return { error: null };
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (error) throw error;
+    if (data) return data as unknown as AuthProfile;
   } catch (err) {
-    return { error: messageOf(err, "Could not sign in. Please try again.") };
+    console.warn("[auth] Could not load profile", err);
+  }
+  // Fall back to the role captured at sign up so the UI stays usable.
+  return { id: user.id, role: metadataRole(user), email: user.email ?? null };
+}
+
+async function applySession(session: Session | null) {
+  const user = session?.user ?? null;
+  setState({ session, user });
+  const profile = await loadProfile(user);
+  // Ignore stale results if the user changed while loading.
+  if ((state.user?.id ?? null) === (user?.id ?? null)) {
+    setState({ profile, loading: false });
   }
 }
 
-async function signUp({ email, password, role, fullName }: SignUpInput): Promise<SignUpResult> {
-  try {
-    const { data, error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: {
-        data: { role, full_name: fullName?.trim() || null },
-        emailRedirectTo: typeof window !== "undefined" ? `${window.location.origin}/auth` : undefined,
-      },
+function initAuth() {
+  if (initialized || typeof window === "undefined") return;
+  initialized = true;
+
+  supabase.auth
+    .getSession()
+    .then(({ data }) => applySession(data.session))
+    .catch((err) => {
+      console.error("[auth] getSession failed", err);
+      setState({ loading: false });
     });
-    if (error) return { error: error.message, needsConfirmation: false };
-    // Supabase returns a user with no identities when the email is already taken.
-    if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
-      return { error: "An account with this email already exists. Try signing in.", needsConfirmation: false };
-    }
-    return { error: null, needsConfirmation: !data.session };
-  } catch (err) {
-    return { error: messageOf(err, "Could not create your account."), needsConfirmation: false };
-  }
+
+  supabase.auth.onAuthStateChange((_event, session) => {
+    // Defer to avoid running Supabase queries inside the auth callback.
+    setTimeout(() => {
+      void applySession(session);
+    }, 0);
+  });
 }
 
-async function signOut(): Promise<{ error: string | null }> {
-  try {
-    const { error } = await supabase.auth.signOut();
-    if (error) return { error: error.message };
-    return { error: null };
-  } catch (err) {
-    return { error: messageOf(err, "Could not sign out.") };
+/* ------------------------------- actions ------------------------------ */
+
+async function signIn({ email, password }: Credentials) {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email.trim(),
+    password,
+  });
+  if (error) throw new Error("Invalid login credentials");
+  await applySession(data.session);
+  return data;
+}
+
+async function signUp({ email, password, role }: SignUpInput) {
+  if (role !== "donor" && role !== "bill_requester") {
+    throw new Error("Please choose a valid account role.");
   }
+  const { data, error } = await supabase.auth.signUp({
+    email: email.trim(),
+    password,
+    options: {
+      data: { role },
+      emailRedirectTo:
+        typeof window !== "undefined" ? `${window.location.origin}/` : undefined,
+    },
+  });
+  if (error) throw new Error(error.message);
+  if (data.session) await applySession(data.session);
+  return { needsConfirmation: !data.session, user: data.user };
+}
+
+async function signOut() {
+  const { error } = await supabase.auth.signOut();
+  if (error) console.warn("[auth] signOut error", error);
+  setState({ session: null, user: null, profile: null, loading: false });
+}
+
+async function refreshProfile() {
+  const profile = await loadProfile(state.user);
+  setState({ profile });
+}
+
+/* -------------------------------- hooks -------------------------------- */
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  useEffect(() => {
+    initAuth();
+  }, []);
+  return <>{children}</>;
 }
 
 export function useAuth() {
-  const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-  return { ...snapshot, signIn, signUp, signOut };
-}
+  useEffect(() => {
+    initAuth();
+  }, []);
 
-/** Optional compatibility wrapper; useAuth works without it. */
-export function AuthProvider({ children }: { children: ReactNode }) {
-  return <>{children}</>;
+  const snapshot = useSyncExternalStore(
+    subscribe,
+    () => state,
+    () => serverSnapshot,
+  );
+
+  const role: UserRole | null =
+    snapshot.profile?.role ?? metadataRole(snapshot.user);
+
+  return {
+    ...snapshot,
+    role,
+    isAuthenticated: Boolean(snapshot.user),
+    isAdmin: role === "admin",
+    isDonor: role === "donor",
+    isBillRequester: role === "bill_requester",
+    signIn,
+    signUp,
+    signOut,
+    refreshProfile,
+  };
 }
 
 export default useAuth;

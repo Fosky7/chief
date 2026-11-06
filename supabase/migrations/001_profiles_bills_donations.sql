@@ -1,178 +1,267 @@
--- Chief: profiles, bills and donations (Naira only)
+-- =====================================================================
+-- Chief — profiles, bills & donations (idempotent, non-destructive)
+-- Safe to re-run: every object is created conditionally, existing rows
+-- are preserved, and no permissions are weakened.
+-- =====================================================================
 
-create extension if not exists pgcrypto;
+-- ---------------------------------------------------------------------
+-- 1. Enum types
+-- ---------------------------------------------------------------------
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_type t
+    JOIN pg_namespace n ON n.oid = t.typnamespace
+    WHERE t.typname = 'user_role' AND n.nspname = 'public'
+  ) THEN
+    CREATE TYPE public.user_role AS ENUM ('donor', 'bill_requester', 'admin');
+  END IF;
+END $$;
 
-do $$ begin
-  create type public.user_role as enum ('donor', 'requester', 'admin');
-exception when duplicate_object then null;
-end $$;
+-- If the type pre-existed without these values, add them. NOTE: values added
+-- here are not referenced as enum literals anywhere else in this migration
+-- (Postgres forbids using a freshly added enum value in the same transaction).
+ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'donor';
+ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'bill_requester';
+ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'admin';
 
--- ---------------------------------------------------------------------------
--- Profiles
--- ---------------------------------------------------------------------------
-create table if not exists public.profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_type t
+    JOIN pg_namespace n ON n.oid = t.typnamespace
+    WHERE t.typname = 'bill_status' AND n.nspname = 'public'
+  ) THEN
+    CREATE TYPE public.bill_status AS ENUM ('pending', 'approved', 'rejected', 'funded');
+  END IF;
+END $$;
+
+-- ---------------------------------------------------------------------
+-- 2. Tables
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id uuid PRIMARY KEY REFERENCES auth.users (id) ON DELETE CASCADE,
+  role public.user_role NOT NULL DEFAULT 'donor',
   full_name text,
-  role public.user_role not null default 'donor',
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  avatar_url text,
+  city text,
+  email text,
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 
-alter table public.profiles enable row level security;
+-- Requested live column (preserves existing rows; NULL for old rows).
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email text;
 
-create or replace function public.is_admin()
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select exists (
-    select 1 from public.profiles where id = auth.uid() and role = 'admin'
-  );
-$$;
-
-grant execute on function public.is_admin() to anon, authenticated;
-
-drop policy if exists "profiles_select_own_or_admin" on public.profiles;
-create policy "profiles_select_own_or_admin" on public.profiles
-  for select to authenticated
-  using (id = auth.uid() or public.is_admin());
-
-drop policy if exists "profiles_update_own" on public.profiles;
-create policy "profiles_update_own" on public.profiles
-  for update to authenticated
-  using (id = auth.uid() or public.is_admin())
-  with check (id = auth.uid() or public.is_admin());
-
--- Users may not change their own role (prevents self-promotion to admin).
--- Direct SQL (no auth.uid()) is allowed so operators can promote admins.
-create or replace function public.guard_profile_role()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  if new.role is distinct from old.role
-     and auth.uid() is not null
-     and not public.is_admin() then
-    raise exception 'Only an admin can change account roles';
-  end if;
-  new.updated_at := now();
-  return new;
-end;
-$$;
-
-drop trigger if exists profiles_guard_role on public.profiles;
-create trigger profiles_guard_role
-  before update on public.profiles
-  for each row execute function public.guard_profile_role();
-
--- Create a profile for every new auth user. Only donor/requester can be
--- chosen at sign up; anything else falls back to donor.
-create or replace function public.handle_new_user()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  requested text := coalesce(new.raw_user_meta_data ->> 'role', 'donor');
-begin
-  insert into public.profiles (id, full_name, role)
-  values (
-    new.id,
-    nullif(new.raw_user_meta_data ->> 'full_name', ''),
-    case when requested = 'requester' then 'requester'::public.user_role
-         else 'donor'::public.user_role end
-  )
-  on conflict (id) do nothing;
-  return new;
-end;
-$$;
-
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute function public.handle_new_user();
-
-grant select, update on public.profiles to authenticated;
-
--- ---------------------------------------------------------------------------
--- Bills
--- ---------------------------------------------------------------------------
-create table if not exists public.bills (
-  id uuid primary key default gen_random_uuid(),
-  requester_id uuid not null references auth.users(id) on delete cascade,
-  title text not null check (char_length(title) between 3 and 140),
-  description text not null default '',
-  category text not null check (category in ('Education', 'Health', 'Housing', 'Utilities')),
-  city text not null,
-  goal_amount bigint not null check (goal_amount > 0),
-  raised_amount bigint not null default 0 check (raised_amount >= 0),
-  currency text not null default 'NGN' check (currency = 'NGN'),
+CREATE TABLE IF NOT EXISTS public.bills (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  requester_id uuid NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
+  title text NOT NULL CHECK (char_length(title) BETWEEN 3 AND 140),
+  description text,
+  category text NOT NULL DEFAULT 'Utilities',
+  city text,
+  goal_amount bigint NOT NULL CHECK (goal_amount > 0),
+  raised_amount bigint NOT NULL DEFAULT 0 CHECK (raised_amount >= 0),
+  status public.bill_status NOT NULL DEFAULT 'pending',
   image_url text,
   proof_url text,
-  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected', 'funded')),
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  review_note text,
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 
-create index if not exists bills_status_idx on public.bills (status, created_at desc);
-create index if not exists bills_requester_idx on public.bills (requester_id);
+-- Requested live column (preserves existing rows; NULL for old rows).
+ALTER TABLE public.bills ADD COLUMN IF NOT EXISTS review_note text;
 
-alter table public.bills enable row level security;
+CREATE INDEX IF NOT EXISTS bills_requester_idx ON public.bills (requester_id);
+CREATE INDEX IF NOT EXISTS bills_status_idx ON public.bills (status);
 
-drop policy if exists "bills_select_public_own_admin" on public.bills;
-create policy "bills_select_public_own_admin" on public.bills
-  for select to anon, authenticated
-  using (
-    status in ('approved', 'funded')
-    or requester_id = auth.uid()
-    or public.is_admin()
+CREATE TABLE IF NOT EXISTS public.donations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  bill_id uuid NOT NULL REFERENCES public.bills (id) ON DELETE CASCADE,
+  donor_id uuid REFERENCES auth.users (id) ON DELETE SET NULL,
+  amount bigint NOT NULL CHECK (amount > 0),
+  paystack_reference text UNIQUE,
+  status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'success', 'failed')),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS donations_bill_idx ON public.donations (bill_id);
+CREATE INDEX IF NOT EXISTS donations_donor_idx ON public.donations (donor_id);
+
+-- ---------------------------------------------------------------------
+-- 3. Helper: is the current user an admin? (text comparison avoids
+--    enum-literal use in this transaction)
+-- ---------------------------------------------------------------------
+-- One admin check only: a zero-argument copy next to is_admin(uid DEFAULT auth.uid())
+-- makes every "public.is_admin()" call ambiguous, so keep just the uuid form.
+DROP POLICY IF EXISTS profiles_select_own_or_admin ON public.profiles;
+DROP POLICY IF EXISTS bills_select_public_own_admin ON public.bills;
+DROP FUNCTION IF EXISTS public.is_admin();
+CREATE OR REPLACE FUNCTION public.is_admin(uid uuid DEFAULT auth.uid())
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.id = uid AND p.role::text = 'admin'
   );
+$$;
 
-drop policy if exists "bills_insert_own_pending" on public.bills;
-create policy "bills_insert_own_pending" on public.bills
-  for insert to authenticated
-  with check (
+REVOKE ALL ON FUNCTION public.is_admin(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.is_admin(uuid) TO anon, authenticated;
+
+CREATE POLICY profiles_select_own_or_admin ON public.profiles FOR SELECT
+  USING (id = auth.uid() OR public.is_admin());
+CREATE POLICY bills_select_public_own_admin ON public.bills FOR SELECT
+  USING (status IN ('approved','funded') OR requester_id = auth.uid() OR public.is_admin());
+
+-- ---------------------------------------------------------------------
+-- 4. New-user trigger: create a profile with the chosen sign-up role.
+--    Only 'donor' and 'bill_requester' are self-selectable; anything else
+--    (including 'admin') falls back to 'donor'. The cast happens at runtime,
+--    after this migration has committed.
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  requested text := coalesce(NEW.raw_user_meta_data ->> 'role', 'donor');
+  chosen text;
+BEGIN
+  IF requested IN ('donor', 'bill_requester') THEN
+    chosen := requested;
+  ELSE
+    chosen := 'donor';
+  END IF;
+
+  INSERT INTO public.profiles (id, email, role, full_name)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    chosen::public.user_role,
+    NULLIF(NEW.raw_user_meta_data ->> 'full_name', '')
+  )
+  ON CONFLICT (id) DO NOTHING;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- Backfill profiles for existing users (default role only; never touches
+-- existing profile rows).
+INSERT INTO public.profiles (id, email)
+SELECT u.id, u.email
+FROM auth.users u
+LEFT JOIN public.profiles p ON p.id = u.id
+WHERE p.id IS NULL
+ON CONFLICT (id) DO NOTHING;
+
+-- Fill missing emails on existing profiles without overwriting anything.
+UPDATE public.profiles p
+SET email = u.email
+FROM auth.users u
+WHERE p.id = u.id AND p.email IS NULL;
+
+-- ---------------------------------------------------------------------
+-- 5. Guard: users cannot change their own role (admins / service may).
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.prevent_role_self_change()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NEW.role IS DISTINCT FROM OLD.role
+     AND auth.uid() IS NOT NULL
+     AND NOT public.is_admin() THEN
+    RAISE EXCEPTION 'You cannot change your account role';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS profiles_prevent_role_change ON public.profiles;
+CREATE TRIGGER profiles_prevent_role_change
+  BEFORE UPDATE ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_role_self_change();
+
+-- ---------------------------------------------------------------------
+-- 6. Row level security
+-- ---------------------------------------------------------------------
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.bills ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.donations ENABLE ROW LEVEL SECURITY;
+
+-- profiles
+DROP POLICY IF EXISTS "Profiles: read own" ON public.profiles;
+CREATE POLICY "Profiles: read own" ON public.profiles
+  FOR SELECT TO authenticated
+  USING (id = auth.uid() OR public.is_admin());
+
+DROP POLICY IF EXISTS "Profiles: update own" ON public.profiles;
+CREATE POLICY "Profiles: update own" ON public.profiles
+  FOR UPDATE TO authenticated
+  USING (id = auth.uid() OR public.is_admin())
+  WITH CHECK (id = auth.uid() OR public.is_admin());
+
+-- bills
+DROP POLICY IF EXISTS "Bills: public read approved" ON public.bills;
+CREATE POLICY "Bills: public read approved" ON public.bills
+  FOR SELECT TO anon, authenticated
+  USING (status::text IN ('approved', 'funded'));
+
+DROP POLICY IF EXISTS "Bills: owner read own" ON public.bills;
+CREATE POLICY "Bills: owner read own" ON public.bills
+  FOR SELECT TO authenticated
+  USING (requester_id = auth.uid() OR public.is_admin());
+
+DROP POLICY IF EXISTS "Bills: owner insert pending" ON public.bills;
+CREATE POLICY "Bills: owner insert pending" ON public.bills
+  FOR INSERT TO authenticated
+  WITH CHECK (
     requester_id = auth.uid()
-    and status = 'pending'
-    and raised_amount = 0
+    AND status::text = 'pending'
+    AND raised_amount = 0
+    AND review_note IS NULL
   );
 
-drop policy if exists "bills_update_admin" on public.bills;
-create policy "bills_update_admin" on public.bills
-  for update to authenticated
-  using (public.is_admin())
-  with check (public.is_admin());
+DROP POLICY IF EXISTS "Bills: admin update" ON public.bills;
+CREATE POLICY "Bills: admin update" ON public.bills
+  FOR UPDATE TO authenticated
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
 
-grant select on public.bills to anon, authenticated;
-grant insert, update on public.bills to authenticated;
+-- donations (writes happen server-side via the payment edge function)
+DROP POLICY IF EXISTS "Donations: donor read own" ON public.donations;
+CREATE POLICY "Donations: donor read own" ON public.donations
+  FOR SELECT TO authenticated
+  USING (
+    donor_id = auth.uid()
+    OR public.is_admin()
+    OR EXISTS (
+      SELECT 1 FROM public.bills b
+      WHERE b.id = donations.bill_id AND b.requester_id = auth.uid()
+    )
+  );
 
--- ---------------------------------------------------------------------------
--- Donations (written by the Paystack edge function using the service role)
--- ---------------------------------------------------------------------------
-create table if not exists public.donations (
-  id uuid primary key default gen_random_uuid(),
-  bill_id uuid not null references public.bills(id) on delete cascade,
-  donor_id uuid references auth.users(id) on delete set null,
-  amount bigint not null check (amount > 0),
-  currency text not null default 'NGN' check (currency = 'NGN'),
-  paystack_reference text unique,
-  status text not null default 'pending' check (status in ('pending', 'success', 'failed')),
-  created_at timestamptz not null default now()
-);
+-- ---------------------------------------------------------------------
+-- 7. Grants (RLS still applies on top of these)
+-- ---------------------------------------------------------------------
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
 
-create index if not exists donations_bill_idx on public.donations (bill_id);
-create index if not exists donations_donor_idx on public.donations (donor_id);
+GRANT SELECT, UPDATE ON public.profiles TO authenticated;
+GRANT SELECT ON public.bills TO anon, authenticated;
+GRANT INSERT, UPDATE ON public.bills TO authenticated;
+GRANT SELECT ON public.donations TO authenticated;
 
-alter table public.donations enable row level security;
-
-drop policy if exists "donations_select_own_or_admin" on public.donations;
-create policy "donations_select_own_or_admin" on public.donations
-  for select to authenticated
-  using (donor_id = auth.uid() or public.is_admin());
-
-grant select on public.donations to authenticated;

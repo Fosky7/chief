@@ -1,7 +1,6 @@
-import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { ChiefLogo } from "@/components/ChiefLogo";
-import { GradientButton } from "@/components/ui/brand";
 import { useAuth } from "@/hooks/useAuth";
 
 const links = [
@@ -9,16 +8,21 @@ const links = [
   { to: "/dashboard", label: "Dashboard" },
 ] as const;
 
-const pillBase =
-  "rounded-full px-4 py-2 text-sm font-medium transition-colors duration-200";
+const linkClass =
+  "rounded-full px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-primary/10 hover:text-foreground";
 
-// Floating frosted-glass navigation bar.
 export function NavBar() {
-  const [open, setOpen] = useState(false);
-  const { user, signOut } = useAuth();
+  const { user, loading, signOut } = useAuth();
   const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const [open, setOpen] = useState(false);
 
-  // Close the mobile sheet on Escape.
+  // Close the phone menu whenever the page changes.
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  // Close the phone menu with Escape.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -31,96 +35,91 @@ export function NavBar() {
   async function handleSignOut() {
     setOpen(false);
     await signOut();
-    navigate({ to: "/" });
+    await navigate({ to: "/" });
   }
+
+  const authControl = user ? (
+    <button
+      type="button"
+      onClick={handleSignOut}
+      className="ml-1 rounded-full border border-input px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:bg-primary/10"
+    >
+      Sign out
+    </button>
+  ) : (
+    <Link
+      to="/auth"
+      aria-disabled={loading || undefined}
+      className="bg-brand-gradient shadow-elegant ml-1 rounded-full px-4 py-2 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-0.5"
+    >
+      Sign in
+    </Link>
+  );
 
   return (
     <header className="sticky top-0 z-40 px-3 pt-3">
-      <div className="relative mx-auto max-w-6xl">
-        <nav
-          aria-label="Main"
-          className="glass shadow-elegant flex h-14 items-center justify-between rounded-full pl-2 pr-2 sm:pl-3"
-        >
+      <nav
+        aria-label="Main"
+        className="glass shadow-elegant mx-auto max-w-6xl rounded-3xl px-3 py-2 sm:rounded-full sm:px-5"
+      >
+        <div className="flex items-center justify-between gap-2">
           <Link
             to="/"
-            aria-label="Chief home"
             data-testid="brand-link"
-            className="flex items-center gap-2.5 rounded-full pr-2 font-bold text-foreground"
+            aria-label="Chief home"
+            className="flex items-center gap-2 rounded-full pr-2 font-display text-lg font-bold text-foreground"
           >
-            <span className="ring-gradient flex h-10 w-10 items-center justify-center rounded-full bg-card">
-              <ChiefLogo className="h-7 w-7" decorative />
-            </span>
-            <span className="font-display text-xl font-semibold tracking-tight">Chief</span>
+            <ChiefLogo className="h-8 w-8" decorative />
+            <span>Chief</span>
           </Link>
 
-          <div className="hidden items-center gap-1 md:flex">
+          <div className="hidden items-center gap-1 sm:flex">
             {links.map((l) => (
               <Link
                 key={l.to}
                 to={l.to}
-                className={pillBase}
-                inactiveProps={{ className: "text-muted-foreground hover:bg-muted hover:text-foreground" }}
-                activeProps={{ className: "bg-primary/10 text-primary" }}
+                className={linkClass}
+                activeProps={{ className: "bg-primary/10 text-foreground" }}
               >
                 {l.label}
               </Link>
             ))}
-            {user ? (
-              <GradientButton type="button" size="sm" variant="ghost" className="ml-2" onClick={() => void handleSignOut()}>
-                Sign out
-              </GradientButton>
-            ) : (
-              <GradientButton to="/auth" size="sm" className="ml-2">
-                Sign in
-              </GradientButton>
-            )}
+            {authControl}
           </div>
 
           <button
             type="button"
-            className="flex h-10 w-10 items-center justify-center rounded-full text-foreground transition-colors hover:bg-muted md:hidden"
             aria-label="Toggle menu"
             aria-expanded={open}
             aria-controls="mobile-menu"
-            onClick={() => setOpen((o) => !o)}
+            onClick={() => setOpen((v) => !v)}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-foreground transition-colors hover:bg-primary/10 sm:hidden"
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
               {open ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
             </svg>
           </button>
-        </nav>
+        </div>
 
         {open && (
-          <div
-            id="mobile-menu"
-            className="glass shadow-elegant animate-fade-up absolute inset-x-0 top-full mt-2 rounded-3xl p-3 md:hidden"
-          >
-            <div className="flex flex-col gap-1">
-              {links.map((l) => (
-                <Link
-                  key={l.to}
-                  to={l.to}
-                  onClick={() => setOpen(false)}
-                  className="rounded-2xl px-4 py-3 text-sm font-medium"
-                  inactiveProps={{ className: "text-foreground hover:bg-muted" }}
-                  activeProps={{ className: "bg-primary/10 text-primary" }}
-                >
-                  {l.label}
-                </Link>
-              ))}
-              {user ? (
-                <GradientButton type="button" size="md" variant="ghost" className="mt-1 w-full" onClick={() => void handleSignOut()}>
-                  Sign out
-                </GradientButton>
-              ) : (
-                <GradientButton to="/auth" size="md" className="mt-1 w-full" onClick={() => setOpen(false)}>
-                  Sign in
-                </GradientButton>
-              )}
-            </div>
+          <div id="mobile-menu" className="flex flex-col gap-1 pb-2 pt-2 sm:hidden">
+            {links.map((l) => (
+              <Link
+                key={l.to}
+                to={l.to}
+                onClick={() => setOpen(false)}
+                className={linkClass}
+                activeProps={{ className: "bg-primary/10 text-foreground" }}
+              >
+                {l.label}
+              </Link>
+            ))}
+            <div className="pt-1">{authControl}</div>
           </div>
         )}
-      </div>
+      </nav>
     </header>
   );
 }
+
+export default NavBar;

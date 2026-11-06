@@ -1,306 +1,265 @@
 import { useState, type FormEvent } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useAuth } from "@/hooks/useAuth";
-import { GradientButton } from "@/components/ui/brand";
-import { ROLE_LABELS, type SignupRole } from "@/types";
+import { GradientButton, GlowBackdrop } from "@/components/ui/brand";
+import { useAuth, type AuthMode, type SignUpRole } from "@/hooks/useAuth";
 
 export const Route = createFileRoute("/auth")({
+  head: () => ({
+    meta: [{ title: "Sign in — Chief" }],
+  }),
   component: AuthPage,
 });
 
-type Mode = "signin" | "signup";
-
 const inputClass =
-  "mt-1.5 w-full rounded-xl border border-input bg-background/70 px-4 py-2.5 text-foreground outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/20";
+  "mt-1.5 w-full rounded-xl border border-input bg-background/80 px-4 py-3 text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary focus:ring-4 focus:ring-primary/20";
 
-const roleOptions: Array<{ value: SignupRole; label: string; description: string; icon: string }> = [
-  { value: "donor", label: "Donor", description: "Swipe through verified bills and chip in any amount.", icon: "♥" },
+const roles: Array<{
+  value: SignUpRole;
+  label: string;
+  description: string;
+}> = [
   {
-    value: "requester",
+    value: "donor",
+    label: "Donor",
+    description: "Discover verified bills and help people across Nigeria.",
+  },
+  {
+    value: "bill_requester",
     label: "Bill requester",
-    description: "Post a rent, school or hospital bill for our team to review.",
-    icon: "₦",
+    description: "Submit a rent, school, utility or hospital bill for review.",
   },
 ];
 
 function AuthPage() {
   const navigate = useNavigate();
-  const { user, role, loading: authLoading, signIn, signUp, signOut } = useAuth();
-
-  const [mode, setMode] = useState<Mode>("signin");
+  const { signIn, signUp } = useAuth();
+  const [mode, setMode] = useState<AuthMode>("signIn");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [signupRole, setSignupRole] = useState<SignupRole>("donor");
+  const [role, setRole] = useState<SignUpRole>("donor");
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [created, setCreated] = useState<{ role: SignupRole; needsConfirmation: boolean; email: string } | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
 
-  function switchMode(next: Mode) {
-    setMode(next);
+  function changeMode(nextMode: AuthMode) {
+    setMode(nextMode);
     setError(null);
-    setPassword("");
+    setMessage(null);
+    setHint(null);
+    setRole("donor");
   }
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     setError(null);
-    if (mode === "signup" && password.length < 6) {
-      setError("Password must be at least 6 characters.");
-      return;
-    }
-    setSubmitting(true);
+    setMessage(null);
+    setHint(null);
+    setLoading(true);
+
     try {
-      if (mode === "signin") {
-        const res = await signIn(email, password);
-        if (res.error) {
-          setError(res.error);
-          return;
-        }
-        navigate({ to: "/" });
+      if (mode === "signIn") {
+        await signIn({ email, password });
+        await navigate({ to: "/" });
+        return;
+      }
+
+      const { needsConfirmation } = await signUp({ email, password, role });
+      setPassword("");
+      setMessage("Account created");
+      setHint(
+        needsConfirmation
+          ? "Check your inbox to confirm your email, then sign in."
+          : "You're signed in and ready to go.",
+      );
+    } catch (submissionError) {
+      if (mode === "signIn") {
+        // Avoid disclosing whether a supplied email address is registered.
+        setError("Invalid login credentials");
       } else {
-        const res = await signUp({ email, password, role: signupRole, fullName });
-        if (res.error) {
-          setError(res.error);
-          return;
-        }
-        setCreated({ role: signupRole, needsConfirmation: res.needsConfirmation, email: email.trim() });
-        setPassword("");
+        setError(
+          submissionError instanceof Error
+            ? submissionError.message
+            : "We could not create your account. Please try again.",
+        );
       }
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   }
 
+  const signingIn = mode === "signIn";
+
   return (
-    <div className="mx-auto max-w-5xl px-4 py-12 sm:py-20">
-      <div className="grid overflow-hidden rounded-3xl md:grid-cols-2 md:shadow-elegant">
-        <BrandPanel />
-
-        <section className="glass shadow-elegant rounded-3xl p-8 sm:p-10 md:rounded-none md:shadow-none">
-          {created ? (
-            <div className="animate-fade-up" role="status">
-              <span
-                aria-hidden="true"
-                className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-success/15 text-2xl text-success"
-              >
-                ✓
-              </span>
-              <h1 className="mt-5 font-display text-4xl font-semibold tracking-tight">Account created</h1>
-              <p className="mt-3 text-muted-foreground">
-                Welcome to Chief! You joined as a <strong className="text-foreground">{ROLE_LABELS[created.role]}</strong>.
-              </p>
-              {created.needsConfirmation ? (
-                <p className="mt-2 break-words text-sm text-muted-foreground">
-                  We sent a confirmation link to <span className="font-semibold text-foreground">{created.email}</span>. Confirm
-                  your email, then sign in.
-                </p>
-              ) : (
-                <p className="mt-2 text-sm text-muted-foreground">You're signed in and ready to go.</p>
-              )}
-              <div className="mt-8 flex flex-wrap gap-3">
-                {created.needsConfirmation ? (
-                  <GradientButton
-                    type="button"
-                    size="lg"
-                    onClick={() => {
-                      setCreated(null);
-                      switchMode("signin");
-                    }}
-                  >
-                    Go to sign in
-                  </GradientButton>
-                ) : (
-                  <GradientButton to={created.role === "donor" ? "/discover" : "/dashboard"} size="lg">
-                    {created.role === "donor" ? "Start swiping" : "Go to dashboard"}
-                  </GradientButton>
-                )}
-              </div>
-            </div>
-          ) : !authLoading && user ? (
-            <div className="animate-fade-up">
-              <p className="text-brand-gradient text-xs font-bold uppercase tracking-[0.18em]">You're in</p>
-              <h1 className="mt-2 font-display text-4xl font-semibold tracking-tight">Signed in</h1>
-              <p className="mt-3 break-words text-muted-foreground">
-                Signed in as <span className="font-semibold text-foreground">{user.email}</span>
-                {role ? ` · ${ROLE_LABELS[role]}` : ""}.
-              </p>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <GradientButton to="/discover" size="lg">
-                  Discover bills
-                </GradientButton>
-                <GradientButton type="button" variant="ghost" size="lg" onClick={() => void signOut()}>
-                  Sign out
-                </GradientButton>
-              </div>
-            </div>
-          ) : (
-            <>
-              <p className="text-brand-gradient text-xs font-bold uppercase tracking-[0.18em]">
-                {mode === "signin" ? "Welcome back" : "Join Chief"}
-              </p>
-              <h1 className="mt-2 font-display text-4xl font-semibold tracking-tight">
-                {mode === "signin" ? "Sign in to Chief" : "Create your account"}
-              </h1>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {mode === "signin"
-                  ? "Sign in to post a bill or track your donations."
-                  : "Choose how you'll use Chief. You can give and ask for help in Naira."}
-              </p>
-
-              <form onSubmit={onSubmit} className="mt-8 space-y-5" noValidate={false}>
-                {mode === "signup" && (
-                  <fieldset>
-                    <legend className="text-sm font-semibold">I'm joining as</legend>
-                    <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                      {roleOptions.map((opt) => {
-                        const selected = signupRole === opt.value;
-                        return (
-                          <label
-                            key={opt.value}
-                            className={`relative flex cursor-pointer flex-col rounded-2xl border p-4 transition ${
-                              selected
-                                ? "border-primary bg-primary/10 ring-4 ring-primary/15"
-                                : "border-input bg-background/60 hover:border-primary/50"
-                            }`}
-                          >
-                            <input
-                              type="radio"
-                              name="role"
-                              value={opt.value}
-                              aria-label={opt.label}
-                              checked={selected}
-                              onChange={() => setSignupRole(opt.value)}
-                              className="sr-only"
-                            />
-                            <span className="flex items-center gap-2">
-                              <span
-                                aria-hidden="true"
-                                className="bg-brand-gradient inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-primary-foreground"
-                              >
-                                {opt.icon}
-                              </span>
-                              <span className="font-semibold text-foreground">{opt.label}</span>
-                            </span>
-                            <span aria-hidden="true" className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                              {opt.description}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </fieldset>
-                )}
-
-                {mode === "signup" && (
-                  <label className="block text-sm font-semibold">
-                    Full name <span className="font-normal text-muted-foreground">(optional)</span>
-                    <input
-                      type="text"
-                      autoComplete="name"
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      className={inputClass}
-                    />
-                  </label>
-                )}
-
-                <label className="block text-sm font-semibold">
-                  Email
-                  <input
-                    type="email"
-                    required
-                    autoComplete="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className={inputClass}
-                  />
-                </label>
-                <label className="block text-sm font-semibold">
-                  Password
-                  <input
-                    type="password"
-                    required
-                    minLength={mode === "signup" ? 6 : undefined}
-                    autoComplete={mode === "signin" ? "current-password" : "new-password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className={inputClass}
-                  />
-                </label>
-
-                {error && (
-                  <p
-                    role="alert"
-                    className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-                  >
-                    {error}
-                  </p>
-                )}
-
-                <GradientButton type="submit" disabled={submitting} size="lg" className="w-full">
-                  {mode === "signin"
-                    ? submitting
-                      ? "Signing in…"
-                      : "Sign in"
-                    : submitting
-                      ? "Creating account…"
-                      : "Create account"}
-                </GradientButton>
-              </form>
-
-              <p className="mt-6 text-center text-sm text-muted-foreground">
-                {mode === "signin" ? "New to Chief?" : "Already have an account?"}{" "}
-                <button
-                  type="button"
-                  onClick={() => switchMode(mode === "signin" ? "signup" : "signin")}
-                  className="font-semibold text-primary underline-offset-4 hover:underline"
+    <div className="relative isolate mx-auto max-w-6xl px-4 py-12 sm:py-20">
+      <GlowBackdrop className="opacity-70" />
+      <div className="grid overflow-hidden rounded-[2rem] shadow-elegant md:grid-cols-[0.9fr_1.1fr]">
+        <aside className="bg-brand-gradient relative hidden overflow-hidden p-10 text-primary-foreground md:flex md:flex-col md:justify-between">
+          <div aria-hidden="true" className="absolute inset-0 bg-black/20" />
+          <div
+            aria-hidden="true"
+            className="absolute -right-20 -top-20 h-72 w-72 rounded-full bg-white/20 blur-3xl"
+          />
+          <div className="relative">
+            <p className="text-sm font-bold uppercase tracking-[0.18em] text-white/80">
+              Chief
+            </p>
+            <h2 className="mt-4 font-display text-4xl font-semibold leading-tight">
+              Real bills. Verified people. Meaningful help.
+            </h2>
+            <p className="mt-5 max-w-md leading-relaxed text-white/85">
+              Join a community helping Nigerians cover urgent school, rent,
+              utility and hospital bills.
+            </p>
+          </div>
+          <ul className="relative mt-12 space-y-4 text-sm text-white/90">
+            {[
+              "Every bill is reviewed before it goes live",
+              "Your account role keeps your experience relevant",
+              "Payments in Naira are handled securely through Paystack",
+            ].map((item) => (
+              <li key={item} className="flex items-start gap-3">
+                <span
+                  className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/20"
+                  aria-hidden="true"
                 >
-                  {mode === "signin" ? "Create an account" : "Back to sign in"}
-                </button>
+                  ✓
+                </span>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </aside>
+
+        <section className="glass bg-card/90 p-7 sm:p-10 md:p-12">
+          <p className="text-brand-gradient text-xs font-bold uppercase tracking-[0.18em]">
+            {signingIn ? "Welcome back" : "Join the community"}
+          </p>
+          <h1 className="mt-2 font-display text-4xl font-semibold tracking-tight">
+            {signingIn ? "Sign in to Chief" : "Create your account"}
+          </h1>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+            {signingIn
+              ? "Access your donations, submitted bills and account details."
+              : "Choose how you plan to use Chief. You can still support bills with either role."}
+          </p>
+
+          <form onSubmit={submit} className="mt-8 space-y-5" noValidate={false}>
+            <label className="block text-sm font-semibold">
+              Email
+              <input
+                type="email"
+                name="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                className={inputClass}
+                placeholder="you@example.com"
+              />
+            </label>
+
+            <label className="block text-sm font-semibold">
+              Password
+              <input
+                type="password"
+                name="password"
+                required
+                minLength={signingIn ? undefined : 8}
+                autoComplete={signingIn ? "current-password" : "new-password"}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className={inputClass}
+                placeholder={signingIn ? "Your password" : "At least 8 characters"}
+              />
+            </label>
+
+            {!signingIn && (
+              <fieldset className="space-y-3">
+                <legend className="text-sm font-semibold">I'm joining as</legend>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {roles.map((option) => {
+                    const selected = role === option.value;
+
+                    return (
+                      <label
+                        key={option.value}
+                        className={`cursor-pointer rounded-2xl border p-4 transition ${
+                          selected
+                            ? "border-primary bg-primary/10 ring-2 ring-primary/20"
+                            : "border-input bg-background/60 hover:border-primary/50"
+                        }`}
+                      >
+                        <span className="flex items-center gap-3">
+                          <input
+                            type="radio"
+                            name="account-role"
+                            value={option.value}
+                            aria-label={option.label}
+                            checked={selected}
+                            onChange={() => setRole(option.value)}
+                            className="h-4 w-4 accent-primary"
+                          />
+                          <span className="font-semibold text-foreground">
+                            {option.label}
+                          </span>
+                        </span>
+                        <span className="mt-2 block pl-7 text-xs leading-relaxed text-muted-foreground">
+                          {option.description}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            )}
+
+            {error && (
+              <p
+                role="alert"
+                className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive"
+              >
+                {error}
               </p>
-            </>
-          )}
+            )}
+
+            {message && (
+              <div className="rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success">
+                <p role="status" className="font-semibold">
+                  {message}
+                </p>
+                {hint && <p className="mt-1 text-xs opacity-90">{hint}</p>}
+              </div>
+            )}
+
+            <GradientButton
+              type="submit"
+              size="lg"
+              disabled={loading}
+              className="w-full"
+            >
+              {loading
+                ? signingIn
+                  ? "Signing in…"
+                  : "Creating account…"
+                : signingIn
+                  ? "Sign in"
+                  : "Create account"}
+            </GradientButton>
+          </form>
+
+          <div className="mt-6 border-t border-border/70 pt-6 text-center text-sm text-muted-foreground">
+            {signingIn ? "New to Chief?" : "Already have an account?"}{" "}
+            <button
+              type="button"
+              className="font-semibold text-primary underline-offset-4 transition hover:underline"
+              onClick={() => changeMode(signingIn ? "signUp" : "signIn")}
+            >
+              {signingIn ? "Create an account" : "Sign in instead"}
+            </button>
+          </div>
         </section>
       </div>
     </div>
-  );
-}
-
-function BrandPanel() {
-  return (
-    <aside className="bg-brand-gradient relative hidden flex-col justify-between overflow-hidden p-10 text-primary-foreground md:flex">
-      <div aria-hidden="true" className="absolute inset-0 bg-foreground/25" />
-      <div aria-hidden="true" className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary-foreground/15 blur-3xl" />
-      <span
-        aria-hidden="true"
-        className="relative inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-primary-foreground/20 font-display text-xl font-bold ring-1 ring-primary-foreground/40"
-      >
-        C
-      </span>
-      <figure className="relative mt-12">
-        <blockquote className="font-display text-2xl font-medium leading-snug">
-          “I swiped right on a stranger's school fees during my lunch break. Two days later it was fully paid.”
-        </blockquote>
-        <figcaption className="mt-4 text-sm font-medium opacity-90">— Kunle, donor in Lagos</figcaption>
-      </figure>
-      <ul className="relative mt-10 space-y-3 text-sm">
-        {[
-          "Every bill is reviewed before it goes live",
-          "Payments go straight to the hospital, school or landlord",
-          "Amounts shown in Naira, always",
-        ].map((t) => (
-          <li key={t} className="flex items-start gap-3">
-            <span
-              aria-hidden="true"
-              className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary-foreground/25 text-xs font-bold"
-            >
-              ✓
-            </span>
-            <span>{t}</span>
-          </li>
-        ))}
-      </ul>
-    </aside>
   );
 }

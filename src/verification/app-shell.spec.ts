@@ -11,7 +11,7 @@ test.describe("App shell redesign @affected", () => {
     await expect(nav.getByRole("link", { name: "Discover", exact: true })).toBeVisible();
     await expect(nav.getByRole("link", { name: "Dashboard", exact: true })).toBeVisible();
     await nav.getByRole("link", { name: "Sign in", exact: true }).click();
-    await expect(page).toHaveURL(/\/sign-in/);
+    await expect(page).toHaveURL(/\/auth/);
   });
 
   test("footer keeps brand text and trust chip @affected", async ({ page }) => {

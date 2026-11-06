@@ -3,6 +3,9 @@ import { formatNaira, fundedPercent } from "@/lib/currency";
 import { CategoryBadge, ProgressBar } from "@/components/ui/brand";
 
 export const Route = createFileRoute("/discover")({
+  head: () => ({
+    meta: [{ title: "Discover bills — Chief" }],
+  }),
   component: DiscoverPage,
 });
 

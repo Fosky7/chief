@@ -11,6 +11,9 @@ import {
 } from "@/components/ui/brand";
 
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [{ title: "Chief — Pay a bill with a swipe" }],
+  }),
   component: HomePage,
 });
 
@@ -226,7 +229,7 @@ function HomePage() {
               <GradientButton to="/discover" size="lg">
                 Start swiping
               </GradientButton>
-              <GradientButton to="/signin" variant="ghost" size="lg">
+              <GradientButton to="/auth" variant="ghost" size="lg">
                 Post a bill
               </GradientButton>
             </div>

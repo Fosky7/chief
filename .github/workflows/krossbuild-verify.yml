@@ -1,5 +1,5 @@
 name: Kross Verify
-# KrossBuild bundle-verification lane v13-flow-failure-details
+# KrossBuild bundle-verification lane v14-flow-failure-details
 #
 # Proves that a candidate tree really installs, typechecks and bundles BEFORE
 # KrossBuild publishes it. Never deploys anything.
@@ -1519,7 +1519,8 @@ jobs:
               for (const spec of suite.specs || []) for (const t of spec.tests || []) {
                 if (t.status === 'expected' || t.status === 'skipped') continue;
                 const r = (t.results || []).find((x) => x.status !== 'passed') || {};
-                const err = clean((r.error && (r.error.message || r.error.value)) || (r.errors && r.errors[0] && r.errors[0].message) || 'failed').split('\n').slice(0, 2).join(' ');
+                const lines = String((r.error && (r.error.message || r.error.value)) || (r.errors && r.errors[0] && r.errors[0].message) || 'failed').replace(/\u001b\[[0-9;]*m/g, '').split('\n').map((l) => l.trim()).filter(Boolean);
+                const err = clean([lines[0], ...lines.filter((l) => /^(Expected|Received|Locator|- waiting for|- locator resolved|unexpected value)/i.test(l)).slice(0, 4)].join(' · '));
                 push({ file: 'src/verification/' + String(spec.file || suite.file || '').replace(/^.*src\/verification\//, ''), line: spec.line || null, column: null, code: 'FLOW', message: clean((title ? title + ' › ' : '') + spec.title + ' — ' + err) });
               }
               for (const child of suite.suites || []) walk(child, title);

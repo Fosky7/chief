@@ -1,5 +1,5 @@
 name: Kross Verify
-# KrossBuild bundle-verification lane v14-flow-failure-details
+# KrossBuild bundle-verification lane v15-unset-empty-test-secrets
 #
 # Proves that a candidate tree really installs, typechecks and bundles BEFORE
 # KrossBuild publishes it. Never deploys anything.
@@ -192,6 +192,11 @@ jobs:
           set -eo pipefail
           echo flows > /tmp/kross-phase
           echo "KROSS_PHASE=flows" >> "$GITHUB_ENV"
+          # Unset GitHub secrets arrive as empty strings; tests must see them as absent
+          # so their own fallbacks apply (an empty email blocks form submission).
+          for v in E2E_USER_EMAIL E2E_USER_PASSWORD E2E_OTHER_EMAIL E2E_OTHER_PASSWORD; do
+            if [ -z "${!v}" ]; then unset "$v"; fi
+          done
           if [ ! -d src/verification ]; then exit 0; fi
           cat > /tmp/kross-browser-tools/check.config.cjs <<'CONFIGEOF'
           module.exports={testDir:process.env.GITHUB_WORKSPACE+'/src/verification',testMatch:'**/*.spec.{ts,tsx,js,mjs,cjs}',timeout:45000,retries:0,workers:1,reporter:[['json',{outputFile:'/tmp/kross-browser-flows.json'}]],use:{baseURL:'http://127.0.0.1:4173',headless:true}};

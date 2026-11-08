@@ -1,5 +1,5 @@
 name: Kross Verify
-# KrossBuild bundle-verification lane v8-ssr-lane
+# KrossBuild bundle-verification lane v10-accurate-runner-setup-phase
 #
 # Proves that a candidate tree really installs, typechecks and bundles BEFORE
 # KrossBuild publishes it. Never deploys anything.
@@ -18,34 +18,40 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: 🔍 Checkout candidate
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.client_payload.checkout_ref }}
-
       - name: ⏱️ Start clock
         run: |
           echo "KROSS_STARTED_AT=$(date +%s%3N)" >> "$GITHUB_ENV"
           echo "KROSS_PHASE=checkout" >> "$GITHUB_ENV"
 
-      - name: 🥟 Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: 🔍 Checkout candidate
+        uses: actions/checkout@v4
         with:
-          bun-version: latest
+          ref: ${{ github.event.client_payload.checkout_ref }}
+
+      - name: Mark runner setup
+        run: |
+          echo "KROSS_PHASE=setup" >> "$GITHUB_ENV"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.16.0'
+      - name: Pin npm
+        run: npm install -g npm@10.9.2
 
       - name: ♻️ Restore install cache
         uses: actions/cache@v4
         with:
-          path: ~/.bun/install/cache
-          key: kross-bun-${{ runner.os }}-${{ hashFiles('**/bun.lockb', '**/bun.lock', '**/package.json') }}
-          restore-keys: kross-bun-${{ runner.os }}-
+          path: ~/.npm
+          key: kross-npm-22.16.0-10.9.2-${{ runner.os }}-${{ hashFiles('**/package-lock.json', '**/package.json', '**/.npmrc') }}
+          restore-keys: kross-npm-22.16.0-10.9.2-${{ runner.os }}-
 
       - name: 📦 Install (real dependency proof)
         run: |
           set -eo pipefail
           echo install > /tmp/kross-phase
           echo "KROSS_PHASE=install" >> "$GITHUB_ENV"
-          bun install 2>&1 | tee -a verify.log
+          npm ci --include=dev --no-audit --no-fund 2>&1 | tee -a verify.log
 
       # The acceptance lane asserts that promised behaviour is backed by REAL
       # data, which means it must talk to the project's own backend exactly as
@@ -76,6 +82,8 @@ jobs:
             rm -f secrets.json; exit 0
           fi
           node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('secrets.json','utf8'));const d=(j.dotenv||'');fs.writeFileSync('.env',d+'\n');const out=[];for(const line of d.split('\n')){const m=line.match(/^\s*(VITE_SUPABASE_URL|VITE_SUPABASE_PUBLISHABLE_KEY|VITE_SUPABASE_ANON_KEY)\s*=\s*(.*)\s*$/);if(m)out.push(m[1]+'='+m[2].replace(/^['\"]|['\"]$/g,''));}fs.appendFileSync(process.env.GITHUB_ENV,out.join('\n')+(out.length?'\n':''));console.log('build secrets: '+(j.count||0)+', backend vars exported: '+out.length);"
+          rm -f .env.local .env.production .env.production.local
+          node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('secrets.json','utf8'));fs.writeFileSync('.env',j.dotenv||'');"
           rm -f secrets.json
 
 
@@ -83,14 +91,15 @@ jobs:
         continue-on-error: true
         run: |
           echo "KROSS_PHASE=typecheck" >> "$GITHUB_ENV"
-          bunx tsc --noEmit 2>&1 | tee -a typecheck.log || true
+          npx --no-install tsc --noEmit 2>&1 | tee -a typecheck.log || true
 
       - name: 🏗️ Bundle (real vite build proof)
         run: |
           set -eo pipefail
           echo bundle > /tmp/kross-phase
           echo "KROSS_PHASE=bundle" >> "$GITHUB_ENV"
-          NITRO_PRESET=netlify bunx --bun vite build 2>&1 | tee -a verify.log
+          npm run build 2>&1 | tee -a verify.log
+          if [ -d dist ]; then node .kross/build-provenance.cjs; fi
           # Phase B4: a TanStack Start (SSR) build emits Nitro's .output/
           # instead of dist/. Accept either, and record which one so the serve
           # + probe steps below target the real artifact.
@@ -118,7 +127,7 @@ jobs:
             echo "no test files present — skipping"; exit 0
           fi
           set +e
-          bunx vitest run --reporter=json --outputFile=/tmp/kross-vitest.json --reporter=default 2>&1 | tee -a tests.log
+          npx --no-install vitest run --reporter=json --outputFile=/tmp/kross-vitest.json --reporter=default 2>&1 | tee -a tests.log
           VITEST_EXIT=$?
           set -e
           if [ ! -s /tmp/kross-vitest.json ]; then

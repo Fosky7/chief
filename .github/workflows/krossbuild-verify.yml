@@ -1,5 +1,5 @@
 name: Kross Verify
-# KrossBuild bundle-verification lane v10-accurate-runner-setup-phase
+# KrossBuild bundle-verification lane v11-real-browser-runner-evidence
 #
 # Proves that a candidate tree really installs, typechecks and bundles BEFORE
 # KrossBuild publishes it. Never deploys anything.
@@ -127,9 +127,14 @@ jobs:
             echo "no test files present — skipping"; exit 0
           fi
           set +e
-          npx --no-install vitest run --reporter=json --outputFile=/tmp/kross-vitest.json --reporter=default 2>&1 | tee -a tests.log
+          # Playwright verification specs belong to the browser runner, not Vitest.
+          node -e "const fs=require('fs');const path=require('path');const walk=d=>fs.readdirSync(d,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(path.join(d,e.name)):[path.join(d,e.name)]);const files=walk('src').filter(p=>/\.(test|spec)\.[cm]?[jt]sx?$/.test(p)&&!fs.readFileSync(p,'utf8').includes('@playwright/test'));fs.writeFileSync('/tmp/kross-unit-files',files.join('\n'));"
+          if [ ! -s /tmp/kross-unit-files ]; then echo "No unit specs; browser specs run below."; exit 0; fi
+          mapfile -t UNIT_FILES < /tmp/kross-unit-files
+          npx --no-install vitest run "${UNIT_FILES[@]}" --reporter=json --outputFile=/tmp/kross-vitest.json --reporter=default 2>&1 | tee -a tests.log
           VITEST_EXIT=$?
           set -e
+          if [ "$VITEST_EXIT" -ne 0 ]; then exit "$VITEST_EXIT"; fi
           if [ ! -s /tmp/kross-vitest.json ]; then
             echo "::warning::vitest produced no report (exit $VITEST_EXIT) — failing open"
             exit 0
@@ -148,8 +153,10 @@ jobs:
       - name: 🎭 Install Chromium + axe-core (runtime + a11y probes)
         run: |
           set -eo pipefail
-          npm i -D playwright@1.49.1 axe-core@4.10.2 --no-save 2>&1 | tail -n 5
-          npx playwright install --with-deps chromium 2>&1 | tail -n 5
+          mkdir -p /tmp/kross-browser-tools
+          npm install --prefix /tmp/kross-browser-tools @playwright/test@1.49.1 axe-core@4.10.2 2>&1 | tail -n 5
+          /tmp/kross-browser-tools/node_modules/.bin/playwright install --with-deps chromium 2>&1 | tail -n 5
+          echo "NODE_PATH=/tmp/kross-browser-tools/node_modules" >> "$GITHUB_ENV"
 
       - name: 🚀 Serve the built bundle
         run: |
@@ -169,10 +176,29 @@ jobs:
           echo "::warning::preview server never came up; runtime probe will fail open"
           cat preview-server.log || true
 
+      - name: 🧪 Saved browser flow tests
+        env:
+          E2E_USER_EMAIL: ${{ secrets.KROSS_E2E_USER_EMAIL }}
+          E2E_USER_PASSWORD: ${{ secrets.KROSS_E2E_USER_PASSWORD }}
+          E2E_OTHER_EMAIL: ${{ secrets.KROSS_E2E_OTHER_EMAIL }}
+          E2E_OTHER_PASSWORD: ${{ secrets.KROSS_E2E_OTHER_PASSWORD }}
+          E2E_EMAIL_DOMAIN: example.com
+          E2E_SIGNUP_EMAIL_DOMAIN: example.com
+        run: |
+          set -eo pipefail
+          echo flows > /tmp/kross-phase
+          echo "KROSS_PHASE=flows" >> "$GITHUB_ENV"
+          if [ ! -d src/verification ]; then exit 0; fi
+          cat > /tmp/kross-browser-tools/check.config.cjs <<'CONFIGEOF'
+          module.exports={testDir:process.env.GITHUB_WORKSPACE+'/src/verification',testMatch:'**/*.spec.{ts,tsx,js,mjs,cjs}',timeout:45000,retries:0,workers:1,reporter:[['json',{outputFile:'/tmp/kross-browser-flows.json'}]],use:{baseURL:'http://127.0.0.1:4173',headless:true}};
+          CONFIGEOF
+          /tmp/kross-browser-tools/node_modules/.bin/playwright test --config=/tmp/kross-browser-tools/check.config.cjs
+
       - name: 🧪 Boot assertion (every route, real browser)
         env:
           KROSS_PREVIEW_PORT: "4173"
         run: |
+          set -eo pipefail
           echo runtime > /tmp/kross-phase
           echo "KROSS_PHASE=runtime" >> "$GITHUB_ENV"
           cat > /tmp/kross-runtime-probe.cjs <<'PROBEEOF'
@@ -210,13 +236,13 @@ jobs:
             // src/routes/index.tsx -> /. Dynamic ($id) and layout (__root, -private)
             // files are skipped; they are not directly navigable.
             for (const f of files) {
-              const rel = f.replace(/\/g, '/');
-              const m = rel.match(/^src/routes/(.+).(tsx|jsx)$/);
+              const rel = f.split(String.fromCharCode(92)).join('/');
+              const m = rel.match(/^src\/routes\/(.+)\.(tsx|jsx)$/);
               if (!m) continue;
               const seg = m[1];
-              if (seg.includes('$') || /(^|/)(__|-)/.test(seg)) continue;
-              const r = '/' + seg.replace(/(^|/)index$/, '');
-              found.add(r.replace(//+$/, '') || '/');
+              if (seg.includes('$') || /(^|\/)(__|-)/.test(seg)) continue;
+              const r = '/' + seg.replace(/(^|\/)index$/, '');
+              found.add(r.replace(/\/+$/, '') || '/');
             }
 
             for (const f of files) {
@@ -419,6 +445,7 @@ jobs:
 
           PROBEEOF
           node /tmp/kross-runtime-probe.cjs 2>&1 | tee -a runtime.log
+          node -e "const r=require('/tmp/kross-runtime.json');if(r.status!=='passed'||r.routesChecked<1)process.exit(1)"
 
       # ── B4: server-render assertion (SSR trees only) ────────────────────
       # An SSR app that ships an empty shell and only paints after hydration is
@@ -430,6 +457,7 @@ jobs:
         env:
           KROSS_PREVIEW_PORT: "4173"
         run: |
+          set -eo pipefail
           echo ssr > /tmp/kross-phase
           echo "KROSS_PHASE=ssr" >> "$GITHUB_ENV"
           cat > /tmp/kross-ssr-probe.cjs <<'SSREOF'
@@ -538,6 +566,7 @@ jobs:
         env:
           KROSS_PREVIEW_PORT: "4173"
         run: |
+          set -eo pipefail
           echo a11y > /tmp/kross-phase
           echo "KROSS_PHASE=a11y" >> "$GITHUB_ENV"
           cat > /tmp/kross-a11y-probe.cjs <<'AXEEOF'
@@ -832,6 +861,7 @@ jobs:
 
           AXEEOF
           node /tmp/kross-a11y-probe.cjs 2>&1 | tee -a a11y.log
+          node -e "const r=require('/tmp/kross-a11y.json');if(r.status!=='passed'||r.routesAudited<1)process.exit(1)"
 
       # ── GAP #1 — SEMANTIC ACCEPTANCE ────────────────────────────────────
       # Everything above proves the app BUILDS and BOOTS. This proves it does
@@ -844,6 +874,7 @@ jobs:
         env:
           KROSS_PREVIEW_PORT: "4173"
         run: |
+          set -eo pipefail
           echo acceptance > /tmp/kross-phase
           echo "KROSS_PHASE=acceptance" >> "$GITHUB_ENV"
           cat > /tmp/kross-acceptance-probe.cjs <<'ACCEPTEOF'
@@ -1216,6 +1247,7 @@ jobs:
       # Projects can raise or lower their own limits with kross.budget.json.
       - name: 📏 Performance + size budget
         run: |
+          set -eo pipefail
           echo perf > /tmp/kross-phase
           echo "KROSS_PHASE=perf" >> "$GITHUB_ENV"
           cat > /tmp/kross-perf-probe.cjs <<'PERFEOF'

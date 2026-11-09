@@ -1,0 +1,23 @@
+{
+  "tables": {
+    "profiles": {
+      "owner": "id",
+      "key": "id",
+      "operations": ["select", "update"],
+      "access": "owner-only",
+      "fixture": {
+        "metadata": { "krossUpdated": true }
+      },
+      "update": {
+        "metadata": { "krossUpdated": true }
+      },
+      "updateColumn": "metadata",
+      "writableColumns": ["metadata"],
+      "readOnlyColumns": ["id", "role", "email", "full_name"],
+      "jsonColumns": ["metadata"],
+      "columnTypes": {
+        "metadata": "jsonb"
+      }
+    }
+  }
+}

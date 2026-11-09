@@ -1,0 +1,14 @@
+{
+  "tables": {
+    "donations": {
+      "ownerColumn": "donor_id",
+      "key": "id",
+      "disposableFixture": {
+        "amount": 500,
+        "status": "pending",
+        "note": "krossbuild disposable verification donation"
+      },
+      "cleanup": "delete from public.donations where note = 'krossbuild disposable verification donation'"
+    }
+  }
+}

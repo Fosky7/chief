@@ -1,0 +1,22 @@
+{
+  "tables": {
+    "profiles": {
+      "owner": "id",
+      "key": "id",
+      "operations": ["select", "insert", "update"],
+      "updateField": "metadata",
+      "columns": {
+        "id": "uuid",
+        "role": "text",
+        "email": "text",
+        "full_name": "text",
+        "metadata": "jsonb"
+      },
+      "fixture": {
+        "role": "donor",
+        "full_name": "Kross Disposable Tester",
+        "metadata": { "krossUpdated": true }
+      }
+    }
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "tables": {
+    "bills": {
+      "primaryKey": "id",
+      "ownerColumn": "created_by",
+      "disposable": true,
+      "requiredFields": {
+        "title": "string",
+        "amount": "number",
+        "status": "pending | approved | rejected | paid"
+      },
+      "fixtures": [
+        {
+          "title": "E2E disposable bill fixture",
+          "description": "Created by automated verification, safe to delete.",
+          "amount": 5000,
+          "funded_amount": 0,
+          "category": "Test",
+          "status": "pending",
+          "biller_name": "E2E Fixture"
+        }
+      ]
+    },
+    "donations": {
+      "primaryKey": "id",
+      "ownerColumn": "donor_id",
+      "disposable": true,
+      "requiredFields": {
+        "bill_id": "uuid",
+        "amount": "number"
+      },
+      "fixtures": [
+        {
+          "amount": 1000
+        }
+      ]
+    },
+    "profiles": {
+      "primaryKey": "id",
+      "ownerColumn": "id",
+      "disposable": true,
+      "requiredFields": {
+        "role": "donor | creator | admin"
+      },
+      "fixtures": []
+    }
+  },
+  "access": {
+    "bills": {
+      "select": "public",
+      "insert": "authenticated",
+      "update": "admin"
+    },
+    "donations": {
+      "select": "public",
+      "insert": "authenticated",
+      "update": "none"
+    },
+    "profiles": {
+      "select": "public",
+      "insert": "owner",
+      "update": "owner"
+    }
+  }
+}

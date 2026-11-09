@@ -1,0 +1,19 @@
+{
+  "tables": {
+    "bills": {
+      "ownerKey": "user_id",
+      "disposable": true,
+      "fixture": {
+        "title": "Kross E2E admin review bill",
+        "description": "Disposable bill used to prove admin approval persistence.",
+        "amount": 2500,
+        "status": "pending"
+      }
+    },
+    "profiles": {
+      "ownerKey": "id",
+      "disposable": false,
+      "notes": "Read-only role lookup; do not mutate existing profile roles during verification."
+    }
+  }
+}

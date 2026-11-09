@@ -1,0 +1,14 @@
+{
+  "tables": [
+    {
+      "table": "profiles",
+      "key": "id",
+      "owner": "id",
+      "access": "owner-only",
+      "fixture": {
+        "role": "bill_requester",
+        "full_name": "Chief E2E Disposable"
+      }
+    }
+  ]
+}

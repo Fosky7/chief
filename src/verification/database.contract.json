@@ -1,0 +1,17 @@
+{
+  "tables": {
+    "profiles": {
+      "owner": "id",
+      "key": "id",
+      "ownerColumn": "id",
+      "keyColumn": "id",
+      "updatable": ["full_name"],
+      "fixture": {
+        "full_name": "Kross disposable test profile"
+      },
+      "update": {
+        "full_name": "Kross disposable test profile (updated)"
+      }
+    }
+  }
+}

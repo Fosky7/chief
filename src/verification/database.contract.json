@@ -1,0 +1,22 @@
+{
+  "tables": {
+    "profiles": {
+      "key": "id",
+      "owner": "id",
+      "ownerColumn": "id",
+      "operations": ["select", "update"],
+      "jsonColumns": {
+        "metadata": "jsonb"
+      },
+      "columns": {
+        "id": "uuid",
+        "full_name": "text",
+        "metadata": "jsonb"
+      },
+      "fixture": {
+        "full_name": "Kross Disposable Tester",
+        "metadata": { "krossUpdated": true }
+      }
+    }
+  }
+}

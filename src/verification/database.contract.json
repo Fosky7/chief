@@ -1,0 +1,38 @@
+{
+  "tables": {
+    "bills": {
+      "ownerKey": "id",
+      "disposable": true,
+      "fixtures": [
+        {
+          "title": "E2E disposable bill",
+          "description": "Disposable verification record for bill detail and discover flows.",
+          "category": "Verification",
+          "amount": 10000,
+          "target_amount": 10000,
+          "status": "pending"
+        }
+      ]
+    },
+    "donations": {
+      "ownerKey": "id",
+      "disposable": true,
+      "fixtures": [
+        {
+          "amount": 500
+        }
+      ]
+    },
+    "profiles": {
+      "ownerKey": "id",
+      "disposable": true,
+      "fixtures": [
+        {
+          "display_name": "E2E disposable profile",
+          "role": "supporter"
+        }
+      ]
+    }
+  },
+  "notes": "Fixtures are disposable only. Tests use the UI and the connected publishable backend; no admin key or browser storage substitutes persistence."
+}

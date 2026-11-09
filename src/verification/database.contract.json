@@ -1,0 +1,38 @@
+{
+  "tables": [
+    {
+      "table": "profiles",
+      "ownerKey": "user_id",
+      "primaryKey": "user_id",
+      "access": "private-owner",
+      "notes": "Owner read/write; admins may read and moderate rows via public.is_admin(auth.uid()).",
+      "fixture": {
+        "email": "kross-e2e-<run-id>@example.com",
+        "display_name": "Kross E2E",
+        "role": "donor",
+        "kross": {}
+      },
+      "disposableFields": ["display_name", "kross"],
+      "accessFlows": [
+        {
+          "name": "owner",
+          "account": "E2E_USER_EMAIL",
+          "allowed": ["select", "insert", "update", "delete"],
+          "scope": "own row only"
+        },
+        {
+          "name": "admin",
+          "account": "E2E_ADMIN_EMAIL",
+          "allowed": ["select", "update"],
+          "scope": "all rows"
+        },
+        {
+          "name": "other-shared-visitor",
+          "account": "E2E_OTHER_EMAIL",
+          "allowed": ["select"],
+          "scope": "own row only"
+        }
+      ]
+    }
+  ]
+}

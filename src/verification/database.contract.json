@@ -1,0 +1,17 @@
+{
+  "tables": [
+    {
+      "name": "votes",
+      "keyColumn": "id",
+      "ownerKey": "user_id",
+      "access": ["authenticated"],
+      "disposable": true,
+      "writes": ["insert"],
+      "fixtures": {
+        "vote": ["yes", "no"],
+        "bill_id": "id of an existing approved bill (read-only reference, never mutated by the vote test)",
+        "user_id": "authenticated disposable E2E user id"
+      }
+    }
+  ]
+}

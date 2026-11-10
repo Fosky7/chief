@@ -1,0 +1,19 @@
+{
+  "tables": {
+    "profiles": {
+      "ownerKey": "id",
+      "userKey": "user_id",
+      "disposableFields": {
+        "full_name": "E2E Disposable Profile",
+        "city": "Lagos"
+      }
+    },
+    "user_roles": {
+      "ownerKey": "user_id",
+      "userKey": "user_id",
+      "disposableFields": {
+        "role": "donor"
+      }
+    }
+  }
+}

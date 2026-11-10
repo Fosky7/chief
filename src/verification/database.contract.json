@@ -1,0 +1,34 @@
+{
+  "tables": {
+    "profiles": {
+      "ownerKey": "id",
+      "userKey": "user_id",
+      "disposableFields": {
+        "full_name": "E2E Disposable Profile",
+        "city": "Lagos"
+      }
+    },
+    "user_roles": {
+      "ownerKey": "user_id",
+      "userKey": "user_id",
+      "disposableFields": {
+        "role": "donor"
+      }
+    },
+    "bills": {
+      "ownerKey": "id",
+      "disposableFields": {
+        "title": "E2E Disposable Bill — borehole pump repair",
+        "story": "Disposable end-to-end verification bill created by automated tests. Safe to delete.",
+        "category": "Utilities",
+        "city": "Lagos",
+        "biller": "E2E Disposable Biller Ltd",
+        "needed": 100000,
+        "raised": 15000,
+        "status": "pending",
+        "due_date": "2026-12-31",
+        "requester_name": "E2E Disposable Requester"
+      }
+    }
+  }
+}

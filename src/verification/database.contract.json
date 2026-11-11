@@ -1,0 +1,10 @@
+{
+  "tables": {
+    "profiles": {
+      "owner": "id",
+      "key": "id",
+      "ownerOnly": true,
+      "fixture": {}
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "tables": {
+    "bills": {
+      "keyColumn": "id",
+      "ownerColumn": "creator_id",
+      "statusColumn": "status",
+      "reviewStatuses": ["pending", "pending_review", "submitted"],
+      "approveStatus": "approved",
+      "payoutStatus": "paid",
+      "disposableFixture": {
+        "title": "E2E disposable bill (safe to delete)",
+        "description": "Disposable record created by automated verification and removed after the run.",
+        "category": "health",
+        "amount": 1000,
+        "status": "pending_review"
+      },
+      "cleanup": "Delete the created row by id after the verification run."
+    }
+  }
+}

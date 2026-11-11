@@ -1,0 +1,24 @@
+{
+  "tables": {
+    "bills": {
+      "ownerKey": "creator_id",
+      "ownerColumn": "creator_id",
+      "fixture": {
+        "title": "E2E Admin Queue Bill",
+        "description": "Disposable bill created by Module 5 admin queue verification",
+        "category": "verification",
+        "amount": 5000,
+        "funded_amount": 0,
+        "status": "pending"
+      },
+      "disposableFields": [
+        "title",
+        "description",
+        "category",
+        "amount",
+        "funded_amount",
+        "status"
+      ]
+    }
+  }
+}

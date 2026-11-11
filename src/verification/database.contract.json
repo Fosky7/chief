@@ -1,0 +1,24 @@
+{
+  "tables": {
+    "bills": {
+      "key": "id",
+      "owner": "requester_id",
+      "fixture": {
+        "title": "E2E disposable bill",
+        "story": "Disposable verification bill created by automated checks.",
+        "category": "Health",
+        "biller_name": "Lagos University Teaching Hospital",
+        "amount_needed": 25000,
+        "amount_raised": 0,
+        "due_date": "2030-01-15",
+        "status": "pending"
+      }
+    }
+  },
+  "storage": {
+    "bill-proofs": {
+      "public": false,
+      "ownerFolder": "auth.uid()"
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "tables": [
+    {
+      "table": "bills",
+      "ownerColumn": "user_id",
+      "primaryKey": "id",
+      "access": "shared",
+      "fixtureFields": {
+        "title": "E2E disposable bill",
+        "description": "Disposable record created by the Module 5 verification run",
+        "amount": 1000,
+        "status": "pending"
+      },
+      "cleanup": "delete-by-primary-key"
+    },
+    {
+      "table": "donations",
+      "ownerColumn": "user_id",
+      "primaryKey": "id",
+      "access": "public",
+      "fixtureFields": {
+        "amount": 500,
+        "status": "approved"
+      },
+      "cleanup": "delete-by-primary-key"
+    },
+    {
+      "table": "profiles",
+      "ownerColumn": "user_id",
+      "primaryKey": "id",
+      "access": "authenticated",
+      "fixtureFields": {
+        "role": "user"
+      },
+      "cleanup": "delete-by-primary-key"
+    }
+  ]
+}

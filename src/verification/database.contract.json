@@ -1,0 +1,19 @@
+{
+  "tables": {
+    "bills": {
+      "key": "id",
+      "owner": "requester_id",
+      "fixture": {
+        "title": "E2E disposable bill",
+        "story": "Disposable verification bill created by automated tests.",
+        "category": "Health",
+        "biller_name": "E2E General Hospital",
+        "amount_needed": 250000,
+        "amount_raised": 0,
+        "due_date": "2030-01-15",
+        "proof_path": "e2e/proof.png",
+        "status": "pending"
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "tables": [
+    {
+      "table": "bills",
+      "owner": "user_id",
+      "key": "id",
+      "fixture": {
+        "title": "E2E disposable bill",
+        "story": "Disposable verification bill",
+        "category": "Utilities",
+        "biller_name": "Test Biller",
+        "amount": 250000,
+        "due_date": "2030-01-15",
+        "proof_url": "e2e/proof.png",
+        "status": "pending"
+      }
+    }
+  ]
+}

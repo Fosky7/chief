@@ -1,0 +1,57 @@
+{
+  "tables": [
+    {
+      "table": "bills",
+      "owner": "user_id",
+      "ownerColumn": "user_id",
+      "key": "id",
+      "keyColumn": "id",
+      "fixture": {
+        "title": "E2E disposable bill for verification",
+        "story": "Disposable verification bill created by the automated E2E run.",
+        "category": "Electricity",
+        "biller_name": "Ikeja Electric E2E",
+        "amount": 250000,
+        "due_date": "2030-01-15",
+        "proof_url": "e2e/proof.png",
+        "status": "pending"
+      },
+      "fixtures": {
+        "title": "E2E disposable bill for verification",
+        "story": "Disposable verification bill created by the automated E2E run.",
+        "category": "Electricity",
+        "biller_name": "Ikeja Electric E2E",
+        "amount": 250000,
+        "due_date": "2030-01-15",
+        "proof_url": "e2e/proof.png",
+        "status": "pending"
+      },
+      "fields": {
+        "title": "E2E disposable bill for verification",
+        "story": "Disposable verification bill created by the automated E2E run.",
+        "category": "Electricity",
+        "biller_name": "Ikeja Electric E2E",
+        "amount": 250000,
+        "due_date": "2030-01-15",
+        "proof_url": "e2e/proof.png",
+        "status": "pending"
+      },
+      "validFixture": {
+        "title": "E2E disposable bill for verification",
+        "story": "Disposable verification bill created by the automated E2E run.",
+        "category": "Electricity",
+        "biller_name": "Ikeja Electric E2E",
+        "amount": 250000,
+        "due_date": "2030-01-15",
+        "proof_url": "e2e/proof.png",
+        "status": "pending"
+      },
+      "uniqueKey": "id",
+      "constraints": {
+        "title": { "required": true, "valid": "E2E disposable bill for verification" },
+        "user_id": { "required": true, "owner": true },
+        "id": { "required": true, "unique": true }
+      }
+    }
+  ]
+}

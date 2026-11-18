@@ -1,0 +1,26 @@
+{
+  "tables": [
+    {
+      "name": "donations",
+      "key": "id",
+      "owner": "donor_id",
+      "access": {
+        "select": "owner only (donor_id = auth.uid())",
+        "insert": "service role only via paystack edge functions",
+        "update": "service role only via paystack webhook",
+        "delete": "none"
+      },
+      "fixture": {
+        "amount": 1000,
+        "currency": "NGN",
+        "status": "pending",
+        "paystack_reference": "e2e-disposable-<timestamp>"
+      },
+      "fixtureRequires": ["bill_id must reference a disposable approved bill"],
+      "constraints": {
+        "status": ["pending", "success", "failed", "abandoned"],
+        "amount": "> 0"
+      }
+    }
+  ]
+}

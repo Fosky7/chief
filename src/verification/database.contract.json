@@ -1,0 +1,17 @@
+{
+  "tables": [
+    {
+      "table": "bills",
+      "owner": "user_id",
+      "key": "id",
+      "fixture": {
+        "title": "E2E disposable bill",
+        "story": "Disposable verification bill created by an automated test.",
+        "category": "Electricity",
+        "biller_name": "Ikeja Electric",
+        "amount": 25000,
+        "due_date": "2030-01-01"
+      }
+    }
+  ]
+}

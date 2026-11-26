@@ -3,7 +3,7 @@
 // and repaired automatically. No personal data is collected: only the route
 // path, the error message and its stack frames.
 
-const PROJECT_ID = "e39bdba5-983a-4918-ba5f-50cced48db4f";
+const PROJECT_ID = "d928a1bb-df54-4cd7-9dd2-98697be512a2";
 const ENDPOINT_BASE =
   (import.meta as any)?.env?.VITE_SUPABASE_URL ||
   (typeof window !== "undefined" ? (window as any).__SUPABASE_URL__ : "") ||

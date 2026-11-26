@@ -1,0 +1,34 @@
+{
+  "tables": {
+    "bills": {
+      "key": "id",
+      "owner": "requester_id",
+      "fixture": {
+        "title": "E2E disposable bill",
+        "category": "Utilities",
+        "goal_amount": 5000,
+        "status": "pending"
+      }
+    },
+    "donations": {
+      "key": "id",
+      "owner": "donor_id",
+      "writes": "server-only (paystack-webhook edge function)",
+      "fixture": {
+        "bill_id": {
+          "from": "bills",
+          "field": "id",
+          "uuid": true,
+          "note": "Reference the id of the bill this run created through the UI (bills fixture above); never hardcode a foreign id."
+        },
+        "amount": 1000,
+        "currency": "NGN",
+        "status": "pending"
+      }
+    },
+    "profiles": {
+      "key": "id",
+      "owner": "id"
+    }
+  }
+}

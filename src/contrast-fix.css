@@ -1,0 +1,68 @@
+/*
+ * Contrast-safe colour declarations.
+ * The theme tokens are authored in oklch; some contrast tooling cannot
+ * evaluate oklch reliably. These rules restate the same palette in sRGB
+ * (with slightly deeper muted/primary text) so every text/background pair
+ * comfortably exceeds WCAG contrast thresholds. !important guarantees these
+ * win regardless of stylesheet load order.
+ */
+html {
+  color: rgb(28, 26, 52) !important;
+  background-color: rgb(252, 250, 244) !important;
+}
+
+html body {
+  color: rgb(28, 26, 52) !important;
+  background-color: rgb(252, 250, 244) !important;
+}
+
+html .text-foreground {
+  color: rgb(28, 26, 52) !important;
+}
+
+html .text-muted-foreground {
+  color: rgb(78, 76, 102) !important;
+}
+
+html .text-primary {
+  color: rgb(98, 44, 196) !important;
+}
+
+html .bg-background {
+  background-color: rgb(252, 250, 244) !important;
+}
+
+html .bg-card {
+  background-color: rgb(254, 253, 249) !important;
+}
+
+html .bg-muted {
+  background-color: rgb(243, 240, 231) !important;
+}
+
+/*
+ * Leaderboard (/leaderboard): rank badges, giver names, donation counts and
+ * totals keep the same sRGB palette so the rankings stay readable on the card
+ * surface at phone and desktop widths.
+ */
+html .leaderboard-rank {
+  color: rgb(28, 26, 52) !important;
+  background-color: rgb(243, 240, 231) !important;
+}
+
+html .leaderboard-rank-top {
+  color: rgb(255, 255, 255) !important;
+  background-color: rgb(98, 44, 196) !important;
+}
+
+html .leaderboard-name {
+  color: rgb(28, 26, 52) !important;
+}
+
+html .leaderboard-meta {
+  color: rgb(78, 76, 102) !important;
+}
+
+html .leaderboard-total {
+  color: rgb(70, 30, 145) !important;
+}

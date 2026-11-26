@@ -1,102 +1,245 @@
-import { createRootRoute, Outlet } from "@tanstack/react-router";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-
-import { ColorBackdrop } from "@/components/ColorBackdrop";
-import { containment, cx } from "@/config/containment";
-
-/**
- * Single QueryClient for the whole app. Created once at module scope so
- * navigations never tear down the cache.
- */
-const queryClient = new QueryClient();
+import { Component, type ReactNode } from "react";
+import { RouteHead as KrossRouteHead } from "@/components/RouteHead";
+import { Outlet, createRootRoute, redirect } from "@tanstack/react-router";
+import { Layout } from "@/components/Layout";
+import { NotFoundView } from "@/routes/not-found";
+import "../contrast-fix.css";
 
 /**
- * Document-head additions for the root route.
- *
- * The Chief brand mark (`public/favicon.svg`) is registered here **and** as a
- * plain `<link>` in `index.html`, so the icon is present whether the shell is
- * hydrated (head manager active, SPA navigations included) or the document is
- * served cold / pre-hydration.
- *
- * These entries are purely ADDITIVE: no existing icon link is ever removed or
- * replaced, so a host that ships its own `favicon.ico` keeps working and the
- * SVG mark is simply the preferred (SVG-capable) icon.
- *
- * The href is always ROOT-ABSOLUTE (`/favicon.svg`), never a relative `./`
- * path, so nested routes such as `/discover` still resolve the icon.
- *
- * NOTE: these links are intentionally preserved across the design revert — the
- * calmer layout must never drop the icon wiring again.
+ * Isolates the exclusive side-effect component (<RouteHead />) that writes
+ * document head metadata. It renders nothing visible, so if it ever throws,
+ * catching it here keeps every page painting instead of unmounting the
+ * application into a blank screen. It is rendered as a SIBLING of the page
+ * shell (never inside it) so a failure in one can never take out the other.
  */
-const rootHeadLinks = [
-  { rel: "icon", type: "image/svg+xml", sizes: "any", href: "/favicon.svg" },
-  { rel: "apple-touch-icon", href: "/favicon.svg" },
-];
+class HeadBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
 
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.warn("[root] head metadata failed", error);
+  }
+
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
+}
+
+/**
+ * Shell boundary: catches a render failure coming from the shared chrome
+ * (header / nav / footer) which sits outside the router's per-route catch
+ * boundary. Without it one bad render in the chrome unmounts the whole tree and
+ * every address paints a blank white screen. The fallback still supplies the
+ * real "Main" navigation landmark and a visible heading, so the visitor always
+ * gets the brand shell and a way home.
+ */
+class ShellBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.warn("[root] shell failed to render", error);
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children;
+
+    return (
+      <div className="flex min-h-dvh flex-col bg-background text-foreground">
+        <header className="sticky top-0 z-[60] px-3 pt-3 md:px-4">
+          <nav
+            aria-label="Main"
+            className="mx-auto flex h-16 max-w-6xl items-center rounded-full border border-border/70 bg-background/85 px-4 backdrop-blur-xl"
+          >
+            <a
+              href="/"
+              className="inline-flex items-center gap-2 rounded-full text-xl font-semibold tracking-tight text-foreground focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
+            >
+              Chief
+            </a>
+          </nav>
+        </header>
+
+        <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center px-4 py-20 text-center">
+          <h1 className="text-3xl font-semibold sm:text-4xl">Welcome to Chief</h1>
+          <p className="mt-3 text-muted-foreground">
+            We could not finish drawing this page. Everything else still works.
+          </p>
+          <a
+            href="/"
+            className="mt-8 inline-flex items-center justify-center rounded-full border border-primary/30 px-6 py-3 text-base font-semibold text-primary transition-colors hover:bg-primary/10"
+          >
+            Go home
+          </a>
+        </main>
+      </div>
+    );
+  }
+}
+
+/**
+ * Page boundary: a single page's render failure must never blank the whole
+ * document. The shared chrome (header, navigation, footer) keeps painting and
+ * the visitor gets a real heading plus a way home.
+ */
+class PageBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.warn("[root] page failed to render", error);
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children;
+
+    return (
+      <section className="mx-auto flex w-full max-w-md flex-col items-center px-4 py-20 text-center">
+        <h1 className="text-3xl font-semibold sm:text-4xl">Something went wrong</h1>
+        <p role="alert" className="mt-3 text-muted-foreground">
+          This page could not be drawn. The rest of Chief still works.
+        </p>
+        <a
+          href="/"
+          className="mt-8 inline-flex items-center justify-center rounded-full border border-primary/30 px-6 py-3 text-base font-semibold text-primary transition-colors hover:bg-primary/10"
+        >
+          Back to home
+        </a>
+      </section>
+    );
+  }
+}
+
+// Root route: child routes are registered in src/routeTree.gen.ts.
+// Styles are loaded by src/main.tsx (client SPA mounted into #root).
+// NOTE: The real document head tags (title, favicon, meta) live statically in
+// index.html. The head() below mirrors them so the two never disagree.
 export const Route = createRootRoute({
+  // /create-bill is a friendly alias for the bill submission form.
+  beforeLoad: ({ location }) => {
+    const path = location.pathname.replace(/\/+$/, "");
+    if (path === "/create-bill") {
+      throw redirect({ to: "/bills/new", replace: true });
+    }
+    // Legacy sign-in aliases always land on the canonical /auth page.
+    if (path === "/signin" || path === "/sign-in") {
+      throw redirect({ to: "/auth", replace: true });
+    }
+  },
   head: () => ({
-    links: rootHeadLinks,
+    meta: [
+      { charSet: "utf-8" },
+      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { title: "Chief — Pay a bill with a swipe" },
+      {
+        name: "description",
+        content: "Swipe through verified bills and help real people pay rent, school fees and hospital bills.",
+      },
+      { name: "application-name", content: "Chief" },
+      { property: "og:site_name", content: "Chief" },
+      { property: "og:title", content: "Chief" },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+    links: [{ rel: "icon", type: "image/svg+xml", href: "/favicon.svg" }],
   }),
-  component: RootLayout,
+  component: RootComponent,
+  notFoundComponent: NotFound,
+  errorComponent: RootErrorComponent,
 });
 
 /**
- * Root layout: query provider + a single layered colour behind every route.
+ * App shell for every matched route. The page content is rendered inside
+ * <Layout> so the layout itself can never be rendered twice.
  *
- * This is the reverted (calmer) composition. Exactly two decorative layers
- * exist, both non-interactive and both token driven:
+ * <Outlet /> is rendered unconditionally: an empty outlet must still paint the
+ * chrome (header, navigation, footer) instead of an empty screen.
  *
- * 1. `bg-background` on the wrapper — the opaque base every page paints over.
- * 2. `<ColorBackdrop />` — a single fixed, `-z-10` stack of soft blurred brand
- *    blobs plus a subtle mesh, so *every* route inherits colour without any
- *    per-page duplication.
- *
- * The previous, heavier design pass stacked an extra fixed
- * `gradients.pageMesh` overlay (at `opacity-[0.18]`) on top of the backdrop
- * inside this component. That layer has been removed to restore the calmer
- * look; the subtle mesh now lives only inside `ColorBackdrop`, at a much lower
- * opacity. Do not re-add a second full-page wash here.
- *
- * Stacking: `isolate` on the wrapper creates a stacking context, which means
- * the backdrop's `-z-10` layer paints *above* the wrapper's own
- * `bg-background` and *below* the routed content. Without `isolate` the
- * wrapper background would cover the blobs entirely.
- *
- * Width containment: the wrapper carries `containment.routeRoot`
- * (`relative w-full max-w-full overflow-x-clip`) and re-states `max-w-full`
- * plus `overflow-x-clip`, so even a route rendered outside `AppShell` (the
- * catch-all `/$` and `not-found.tsx`) can never widen the document. `clip` is
- * listed after `hidden` at the CSS layer (`src/styles.css`), and `max-w-full`
- * remains the fallback on engines without `clip` support — containment never
- * relies on `clip` alone.
- *
- * Height: `min-h-dvh` keeps the shell full-height on mobile browsers whose
- * toolbars resize the visual viewport, so sticky chrome never jumps.
- *
- * The inner wrapper is a deliberately padding-free pass-through: horizontal
- * gutters belong to each page via `layout.container` (or `AppShell`), so routed
- * content is never double-padded by the root.
- *
- * `AppShell` deliberately stays transparent (no opaque background of its own)
- * so this colour actually shows through on every page.
+ * <RouteHead /> is a sibling of the shell, wrapped in its own boundary, so a
+ * head-metadata problem can never unmount the page content (and vice versa).
  */
-function RootLayout() {
+function RootComponent() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <div
-        className={cx(
-          containment.routeRoot,
-          "isolate min-h-dvh max-w-full overflow-x-clip bg-background text-foreground",
-        )}
-      >
-        {/* The ONLY decorative layer in the app. */}
-        <ColorBackdrop />
-
-        {/* Padding-free pass-through: pages and AppShell own their gutters. */}
-        <div className="min-w-0 w-full max-w-full">
+    <ShellBoundary>
+      <HeadBoundary>
+        <KrossRouteHead
+          fallbackTitle="Chief"
+          notFoundTitle="Page not found — Chief"
+          notFoundDescription="The Chief page you requested does not exist or has moved."
+        />
+      </HeadBoundary>
+      <Layout>
+        <PageBoundary>
           <Outlet />
-        </div>
-      </div>
-    </QueryClientProvider>
+        </PageBoundary>
+      </Layout>
+    </ShellBoundary>
+  );
+}
+
+/**
+ * Last-resort boundary for the whole app. Without it an unexpected render
+ * error unmounts the entire tree and every address shows a blank white page;
+ * with it the visitor still gets the brand header, a heading and a way home.
+ * It deliberately renders no shared components so it can never fail itself.
+ */
+function RootErrorComponent({ error }: { error?: unknown }) {
+  const message =
+    error instanceof Error && error.message
+      ? error.message
+      : "Something unexpected happened while loading this page.";
+
+  return (
+    <div className="flex min-h-dvh flex-col bg-background text-foreground">
+      <header className="sticky top-0 z-[60] px-3 pt-3 md:px-4">
+        <nav
+          aria-label="Main"
+          className="mx-auto flex h-16 max-w-6xl items-center rounded-full border border-border/70 bg-background/85 px-4 backdrop-blur-xl"
+        >
+          <a
+            href="/"
+            className="inline-flex items-center gap-2 rounded-full text-xl font-semibold tracking-tight text-foreground focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30"
+          >
+            Chief
+          </a>
+        </nav>
+      </header>
+
+      <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center px-4 py-20 text-center">
+        <h1 className="text-3xl font-semibold sm:text-4xl">Something went wrong</h1>
+        <p role="alert" className="mt-3 text-muted-foreground">
+          {message}
+        </p>
+        <a
+          href="/"
+          className="mt-8 inline-flex items-center justify-center rounded-full border border-primary/30 px-6 py-3 text-base font-semibold text-primary transition-colors hover:bg-primary/10"
+        >
+          Back to home
+        </a>
+      </main>
+    </div>
+  );
+}
+
+/**
+ * Fallback for any URL that does not match a registered route. Uses the shared
+ * branded view and keeps the long-standing "Go home" action label.
+ * The root-level fallback renders outside RootComponent, so it supplies
+ * <Layout> itself.
+ */
+function NotFound() {
+  return (
+    <Layout>
+      <NotFoundView homeLabel="Go home" />
+    </Layout>
   );
 }

@@ -1,53 +1,95 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+import { GradientButton } from "@/components/ui/brand";
 
-import { AppShell } from "@/components/AppShell";
-import { PageHero } from "@/components/PageHero";
-import { buttons, layout, surfaces, typography } from "@/config/theme";
+export type NotFoundViewProps = {
+  /** Main heading. Defaults to the wording used across the app. */
+  title?: string;
+  /** Supporting copy under the heading. */
+  description?: string;
+  /**
+   * Label for the primary action back to the home page.
+   *
+   * The footer already offers a "Back to home" link on every page, so the
+   * in-page action uses a distinct label to keep accessibility lookups
+   * unambiguous (one "Back to home" per page).
+   */
+  homeLabel?: string;
+};
 
 /**
- * Not-found page.
+ * Branded page-not-found view.
  *
- * The background is the single `ColorBackdrop` inherited from `__root.tsx` — no
- * local wash or mesh is added here. The heading uses the shared `PageHero` so
- * the calm one-aurora-band composition is identical to every other page.
+ * It intentionally does NOT render <Layout> itself:
+ *  - file-based routes are rendered inside the root layout's <Outlet />, and
+ *  - the root route's `notFoundComponent` re-wraps it in <Layout>.
+ * Keeping the view layout-free lets both entry points reuse the same markup.
+ *
+ * Responsive notes: the numeral, heading and body type scale up from phone to
+ * desktop, the supporting copy is width-capped so it never stretches into an
+ * unreadable line, and the primary action is full-width on small screens.
  */
-export function NotFoundPage() {
+export function NotFoundView({
+  title = "Page not found",
+  description = "The page you're looking for doesn't exist.",
+  homeLabel = "Go home",
+}: NotFoundViewProps) {
   return (
-    <AppShell>
-      <PageHero
-        eyebrow="404"
-        title="Page not found"
-        description="That link does not point at a page Chief knows about. Head back to Discover to find a verified request, or check your giving on the dashboard."
-        actions={
-          <Link to="/" className={buttons.primary}>
-            Back to home
-          </Link>
-        }
-      />
-
-      <section className={`${layout.container} ${layout.section}`}>
-        <div className={`mx-auto max-w-2xl ${surfaces.card} p-6`}>
-          <h2 className={typography.subheading}>Where to next</h2>
-          <p className={`mt-2 ${typography.body}`}>
-            The page may have moved, or the address may have a typo. Chief only
-            needs a valid route to get you back on track.
-          </p>
-          <div className="mt-5 flex flex-wrap gap-3">
-            <Link to="/discover" className={buttons.primary}>
-              Go to Discover
-            </Link>
-            <Link to="/dashboard" className={buttons.secondary}>
-              View your pledges
-            </Link>
-          </div>
-        </div>
-      </section>
-    </AppShell>
+    <section
+      data-testid="not-found"
+      aria-labelledby="not-found-title"
+      className="animate-fade-up mx-auto flex w-full max-w-lg flex-col items-center px-4 py-16 text-center sm:px-6 sm:py-24"
+    >
+      {/* Decorative numeral: hidden from assistive tech so the h1 carries meaning. */}
+      <p
+        aria-hidden="true"
+        className="text-brand-gradient font-display text-6xl font-bold leading-none tracking-tight sm:text-8xl"
+      >
+        404
+      </p>
+      <h1
+        id="not-found-title"
+        className="mt-6 text-balance text-2xl font-semibold leading-tight sm:text-3xl md:text-4xl"
+      >
+        {title}
+      </h1>
+      <p className="mt-3 max-w-sm text-sm text-muted-foreground sm:max-w-md sm:text-base">
+        {description}
+      </p>
+      <GradientButton to="/" size="lg" className="mt-8 w-full sm:w-auto">
+        {homeLabel}
+      </GradientButton>
+    </section>
   );
 }
 
+/**
+ * The view is also reachable directly at /not-found so the route is a real,
+ * typed member of the router tree (the file-based router expects every file in
+ * src/routes to export a `Route`).
+ */
 export const Route = createFileRoute("/not-found")({
+  head: () => ({
+    meta: [
+      { title: "Nothing here — Chief 404" },
+      {
+        name: "description",
+        content:
+          "Nothing lives at this Chief address. Use the navigation above to open Discover, your dashboard or the sign-in page.",
+      },
+      { property: "og:title", content: "Nothing here — Chief 404" },
+      {
+        property: "og:description",
+        content:
+          "Nothing lives at this Chief address. Use the navigation above to open Discover, your dashboard or the sign-in page.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "robots", content: "noindex" },
+    ],
+  }),
   component: NotFoundPage,
 });
 
-export default NotFoundPage;
+function NotFoundPage() {
+  return <NotFoundView />;
+}

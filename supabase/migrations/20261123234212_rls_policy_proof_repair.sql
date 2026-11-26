@@ -1,0 +1,34 @@
+-- Repair emitted by the continuous RLS policy proof.
+-- Each block fixes an operation the app performs that the database refuses.
+
+-- "bills": the app performs SELECT as anon, but the database refuses it.
+GRANT SELECT ON public.bills TO anon;
+GRANT ALL ON public.bills TO service_role;
+
+-- "bills": the app performs UPDATE as anon, but the database refuses it.
+GRANT UPDATE ON public.bills TO anon;
+GRANT ALL ON public.bills TO service_role;
+
+-- "bills": the app performs SELECT as authenticated, but the database refuses it.
+GRANT SELECT ON public.bills TO authenticated;
+GRANT ALL ON public.bills TO service_role;
+
+-- "bills": the app performs UPDATE as authenticated, but the database refuses it.
+GRANT UPDATE ON public.bills TO authenticated;
+GRANT ALL ON public.bills TO service_role;
+
+-- "bills": the app performs INSERT as authenticated, but the database refuses it.
+GRANT INSERT ON public.bills TO authenticated;
+GRANT ALL ON public.bills TO service_role;
+
+-- "profiles": the app performs SELECT as anon, but the database refuses it.
+GRANT SELECT ON public.profiles TO anon;
+GRANT ALL ON public.profiles TO service_role;
+
+-- "profiles": the app performs SELECT as authenticated, but the database refuses it.
+GRANT SELECT ON public.profiles TO authenticated;
+GRANT ALL ON public.profiles TO service_role;
+
+-- "donations": the app performs SELECT as authenticated, but the database refuses it.
+GRANT SELECT ON public.donations TO authenticated;
+GRANT ALL ON public.donations TO service_role;
